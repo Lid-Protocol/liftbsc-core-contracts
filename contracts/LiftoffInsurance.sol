@@ -2,11 +2,12 @@ pragma solidity =0.6.6;
 
 import "./interfaces/ILiftoffSettings.sol";
 import "./interfaces/ILiftoffEngine.sol";
-import "./LiftoffEngine.sol";
 import "./interfaces/ILiftoffInsurance.sol";
 import "./interfaces/ILiftoffPartnerships.sol";
 import "./library/BasisPoints.sol";
-import "@lidprotocol/xlock-contracts/contracts/interfaces/IXLocker.sol";
+import "@uniswap/v2-core/contracts/interfaces/IERC20.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+import "@uniswap/v2-periphery/contracts/libraries/UniswapV2Library.sol";
 import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/math/MathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
@@ -27,10 +28,10 @@ contract LiftoffInsurance is
         uint256 startTime;
         uint256 totalIgnited;
         uint256 tokensPerEthWad;
-        uint256 baseXEth;
+        uint256 baseBusd;
         uint256 baseTokenLidPool;
-        uint256 redeemedXEth;
-        uint256 claimedXEth;
+        uint256 redeemedBusd;
+        uint256 claimedBusd;
         uint256 claimedTokenLidPool;
         address pair;
         address deployed;
@@ -50,14 +51,14 @@ contract LiftoffInsurance is
         uint256 tokenId,
         uint256 startTime,
         uint256 tokensPerEthWad,
-        uint256 baseXEth,
+        uint256 baseBusd,
         uint256 baseTokenLidPool,
         uint256 totalIgnited,
         address deployed,
         address dev
     );
     event ClaimBaseFee(uint256 tokenId, uint256 baseFee);
-    event Claim(uint256 tokenId, uint256 xEthClaimed, uint256 tokenClaimed);
+    event Claim(uint256 tokenId, uint256 BusdClaimed, uint256 tokenClaimed);
     event Redeem(uint256 tokenId, uint256 redeemEth);
 
     function initialize(ILiftoffSettings _liftoffSettings)
@@ -93,9 +94,9 @@ contract LiftoffInsurance is
         );
 
         IERC20 token = IERC20(tokenInsurance.deployed);
-        IERC20 xeth = IXEth(liftoffSettings.getXEth());
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
 
-        uint256 xEthValue =
+        uint256 busdValue =
             _pullTokensForRedeem(tokenInsurance, token, _amount);
 
         require(
@@ -103,10 +104,10 @@ contract LiftoffInsurance is
                 now,
                 tokenInsurance.startTime,
                 liftoffSettings.getInsurancePeriod(),
-                xEthValue,
-                tokenInsurance.baseXEth,
-                tokenInsurance.redeemedXEth.add(xEthValue),
-                tokenInsurance.claimedXEth,
+                busdValue,
+                tokenInsurance.baseBusd,
+                tokenInsurance.redeemedBusd.add(busdValue),
+                tokenInsurance.claimedBusd,
                 tokenInsurance.isUnwound
             ),
             "Redeem request exceeds available insurance."
@@ -118,32 +119,32 @@ contract LiftoffInsurance is
             tokenInsurance.startTime.add(
                 liftoffSettings.getInsurancePeriod()
             ) &&
-            //Already reached the baseXEth
-            tokenInsurance.baseXEth < tokenInsurance.redeemedXEth.add(xEthValue)
+            //Already reached the baseBusd
+            tokenInsurance.baseBusd < tokenInsurance.redeemedBusd.add(busdValue)
         ) {
             //Trigger unwind
             tokenInsurance.isUnwound = true;
-            IXLocker(liftoffSettings.getXLocker()).setBlacklistUniswapBuys(
-                tokenInsurance.pair,
-                address(token),
-                true
-            );
+            // IXLocker(liftoffSettings.getXLocker()).setBlacklistUniswapBuys(
+            //     tokenInsurance.pair,
+            //     address(token),
+            //     true
+            // );
         }
 
         if (tokenInsurance.isUnwound) {
             //All tokens are sold on market during unwind, to maximize insurance returns.
-            _swapExactTokensForXEth(
+            _swapExactTokensForBusd(
                 token.balanceOf(address(this)),
                 token,
                 IUniswapV2Pair(tokenInsurance.pair)
             );
         }
-        tokenInsurance.redeemedXEth = tokenInsurance.redeemedXEth.add(
-            xEthValue
+        tokenInsurance.redeemedBusd = tokenInsurance.redeemedBusd.add(
+            busdValue
         );
-        require(xeth.transfer(msg.sender, xEthValue), "Transfer failed.");
+        require(busd.transfer(msg.sender, busdValue), "Transfer failed.");
 
-        emit Redeem(_tokenSaleId, xEthValue);
+        emit Redeem(_tokenSaleId, busdValue);
     }
 
     function claim(uint256 _tokenSaleId) external override {
@@ -158,10 +159,10 @@ contract LiftoffInsurance is
                 liftoffSettings.getInsurancePeriod()
             );
 
-        IXEth xeth = IXEth(liftoffSettings.getXEth());
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
 
         bool didBaseFeeClaim =
-            _baseFeeClaim(tokenInsurance, xeth, _tokenSaleId);
+            _baseFeeClaim(tokenInsurance, busd, _tokenSaleId);
         if (didBaseFeeClaim) {
             return; //If claiming base fee, ONLY claim base fee.
         }
@@ -170,13 +171,13 @@ contract LiftoffInsurance is
         //For first 7 days, only claim base fee
         require(cycles > 0, "Cannot claim until after first cycle ends.");
 
-        uint256 totalXethClaimed =
-            _xEthClaimDistribution(tokenInsurance, _tokenSaleId, cycles, xeth);
+        uint256 totalBusdClaimed =
+            _bUsdClaimDistribution(tokenInsurance, _tokenSaleId, cycles, busd);
 
         uint256 totalTokenClaimed =
             _tokenClaimDistribution(tokenInsurance, cycles);
 
-        emit Claim(_tokenSaleId, totalXethClaimed, totalTokenClaimed);
+        emit Claim(_tokenSaleId, totalBusdClaimed, totalTokenClaimed);
     }
 
     function createInsurance(uint256 _tokenSaleId) external override {
@@ -212,12 +213,12 @@ contract LiftoffInsurance is
                 .mul(1 ether)
                 .div(totalIgnited.subBP(liftoffSettings.getBaseFeeBP()))
                 .add(1), //division error safety margin,
-            baseXEth: totalIgnited.sub(
+            baseBusd: totalIgnited.sub(
                 totalIgnited.mulBP(liftoffSettings.getEthBuyBP())
             ),
             baseTokenLidPool: IERC20(deployed).balanceOf(address(this)),
-            redeemedXEth: 0,
-            claimedXEth: 0,
+            redeemedBusd: 0,
+            claimedBusd: 0,
             claimedTokenLidPool: 0,
             pair: pair,
             deployed: deployed,
@@ -230,7 +231,7 @@ contract LiftoffInsurance is
             _tokenSaleId,
             tokenInsurances[_tokenSaleId].startTime,
             tokenInsurances[_tokenSaleId].tokensPerEthWad,
-            tokenInsurances[_tokenSaleId].baseXEth,
+            tokenInsurances[_tokenSaleId].baseBusd,
             tokenInsurances[_tokenSaleId].baseTokenLidPool,
             totalIgnited,
             deployed,
@@ -246,10 +247,10 @@ contract LiftoffInsurance is
             uint256 startTime,
             uint256 totalIgnited,
             uint256 tokensPerEthWad,
-            uint256 baseXEth,
+            uint256 baseBusd,
             uint256 baseTokenLidPool,
-            uint256 redeemedXEth,
-            uint256 claimedXEth,
+            uint256 redeemedBusd,
+            uint256 claimedBusd,
             uint256 claimedTokenLidPool
         )
     {
@@ -258,10 +259,10 @@ contract LiftoffInsurance is
         startTime = t.startTime;
         totalIgnited = t.totalIgnited;
         tokensPerEthWad = t.tokensPerEthWad;
-        baseXEth = t.baseXEth;
+        baseBusd = t.baseBusd;
         baseTokenLidPool = t.baseTokenLidPool;
-        redeemedXEth = t.redeemedXEth;
-        claimedXEth = t.claimedXEth;
+        redeemedBusd = t.redeemedBusd;
+        claimedBusd = t.claimedBusd;
         claimedTokenLidPool = t.claimedTokenLidPool;
     }
 
@@ -290,10 +291,10 @@ contract LiftoffInsurance is
         uint256 currentTime,
         uint256 startTime,
         uint256 insurancePeriod,
-        uint256 xEthValue,
-        uint256 baseXEth,
-        uint256 redeemedXEth,
-        uint256 claimedXEth,
+        uint256 busdValue,
+        uint256 baseBusd,
+        uint256 redeemedBusd,
+        uint256 claimedBusd,
         bool isUnwound
     ) public pure override returns (bool) {
         if (isUnwound) {
@@ -303,8 +304,8 @@ contract LiftoffInsurance is
         if (
             //After the first period (1 week)
             currentTime > startTime.add(insurancePeriod) &&
-            //Already reached the baseXEth
-            baseXEth < redeemedXEth.add(claimedXEth).add(xEthValue)
+            //Already reached the baseBusd
+            baseBusd < redeemedBusd.add(claimedBusd).add(busdValue)
         ) {
             return true;
         } else {
@@ -342,15 +343,15 @@ contract LiftoffInsurance is
         return totalMaxTokenClaim.sub(claimedTokenLidPool);
     }
 
-    function getTotalXethClaimable(
+    function getTotalBusdClaimable(
         uint256 totalIgnited,
-        uint256 redeemedXEth,
-        uint256 claimedXEth,
+        uint256 redeemedBusd,
+        uint256 claimedBusd,
         uint256 cycles
     ) public pure override returns (uint256) {
         if (cycles == 0) return 0;
         uint256 totalFinalClaim =
-            totalIgnited.sub(redeemedXEth).sub(claimedXEth);
+            totalIgnited.sub(redeemedBusd).sub(claimedBusd);
         uint256 totalMaxClaim = totalFinalClaim.mul(cycles).div(10); //10 periods hardcoded
         if (totalMaxClaim > totalFinalClaim) totalMaxClaim = totalFinalClaim;
         return totalMaxClaim;
@@ -360,7 +361,7 @@ contract LiftoffInsurance is
         TokenInsurance storage tokenInsurance,
         IERC20 token,
         uint256 _amount
-    ) internal returns (uint256 xEthValue) {
+    ) internal returns (uint256 busdValue) {
         uint256 initialBalance = token.balanceOf(address(this));
         require(
             token.transferFrom(msg.sender, address(this), _amount),
@@ -370,32 +371,32 @@ contract LiftoffInsurance is
         uint256 amountReceived =
             token.balanceOf(address(this)).sub(initialBalance);
 
-        xEthValue = getRedeemValue(
+        busdValue = getRedeemValue(
             amountReceived,
             tokenInsurance.tokensPerEthWad
         );
         require(
-            xEthValue >= 0.001 ether,
-            "Amount must have value of at least 0.001 xETH"
+            busdValue >= 0.001 ether,
+            "Amount must have value of at least 0.001 BUSD"
         );
-        return xEthValue;
+        return busdValue;
     }
 
-    function _xEthClaimDistribution(
+    function _bUsdClaimDistribution(
         TokenInsurance storage tokenInsurance,
         uint256 tokenId,
         uint256 cycles,
-        IERC20 xeth
+        IERC20 busd
     ) internal returns (uint256 totalClaimed) {
         uint256 totalClaimable =
-            getTotalXethClaimable(
+            getTotalBusdClaimable(
                 tokenInsurance.totalIgnited,
-                tokenInsurance.redeemedXEth,
-                tokenInsurance.claimedXEth,
+                tokenInsurance.redeemedBusd,
+                tokenInsurance.claimedBusd,
                 cycles
             );
 
-        tokenInsurance.claimedXEth = tokenInsurance.claimedXEth.add(
+        tokenInsurance.claimedBusd = tokenInsurance.claimedBusd.add(
             totalClaimable
         );
 
@@ -412,8 +413,8 @@ contract LiftoffInsurance is
             projectDevBP = projectDevBP.sub(totalBPForParnterships);
             uint256 wad = totalClaimable.mulBP(totalBPForParnterships);
             require(
-                xeth.transfer(liftoffPartnerships, wad),
-                "Transfer xEth projectDev failed"
+                busd.transfer(liftoffPartnerships, wad),
+                "Transfer BUSD projectDev failed"
             );
             ILiftoffPartnerships(liftoffPartnerships).addFees(tokenId, wad);
         }
@@ -422,25 +423,25 @@ contract LiftoffInsurance is
         //The ethBuyBP was used by liftoffEngine, and baseFeeBP is seperate above.
         //So the total BP transferred here will always be 10000-ethBuyBP-baseFeeBP
         require(
-            xeth.transfer(
+            busd.transfer(
                 tokenInsurance.projectDev,
                 totalClaimable.mulBP(projectDevBP)
             ),
-            "Transfer xEth projectDev failed"
+            "Transfer BUSD projectDev failed"
         );
         require(
-            xeth.transfer(
+            busd.transfer(
                 liftoffSettings.getLidTreasury(),
                 totalClaimable.mulBP(liftoffSettings.getMainFeeBP())
             ),
-            "Transfer xEth lidTreasury failed"
+            "Transfer BUSD lidTreasury failed"
         );
         require(
-            xeth.transfer(
+            busd.transfer(
                 liftoffSettings.getLidPoolManager(),
                 totalClaimable.mulBP(liftoffSettings.getLidPoolBP())
             ),
-            "Transfer xEth lidPoolManager failed"
+            "Transfer BUSD lidPoolManager failed"
         );
         return totalClaimable;
     }
@@ -471,7 +472,7 @@ contract LiftoffInsurance is
 
     function _baseFeeClaim(
         TokenInsurance storage tokenInsurance,
-        IERC20 xeth,
+        IERC20 busd,
         uint256 _tokenSaleId
     ) internal returns (bool didClaim) {
         if (!tokenInsurance.hasBaseFeeClaimed) {
@@ -480,7 +481,7 @@ contract LiftoffInsurance is
                     liftoffSettings.getBaseFeeBP() - 30 //30 BP is taken by uniswap during unwind
                 );
             require(
-                xeth.transfer(liftoffSettings.getLidTreasury(), baseFee),
+                busd.transfer(liftoffSettings.getLidTreasury(), baseFee),
                 "Transfer failed"
             );
             tokenInsurance.hasBaseFeeClaimed = true;
@@ -493,7 +494,7 @@ contract LiftoffInsurance is
         }
     }
 
-    function _swapExactTokensForXEth(
+    function _swapExactTokensForBusd(
         uint256 amountIn,
         IERC20 token,
         IUniswapV2Pair pair

@@ -36,7 +36,7 @@ contract LiftoffRegistration is
         uint256 launchTime,
         uint256 softCap,
         uint256 hardCap,
-        uint256 totalSupplyWad,
+        uint256 fixedRate,
         string calldata name,
         string calldata symbol
     ) external override {
@@ -49,12 +49,12 @@ contract LiftoffRegistration is
             "Not allowed to launch after maxLaunchTime"
         );
         require(
-            totalSupplyWad < (10**12) * (10**18),
-            "Cannot launch more than 1 trillion tokens"
+            fixedRate >= (10**9),
+            "FixedRate is less than minimum"
         );
         require(
-            totalSupplyWad >= 1000 * (10**18),
-            "Cannot launch less than 1000 tokens"
+            fixedRate <= (10**27),
+            "FixedRate is more than maximum"
         );
         require(
             softCap >= 10 ether,
@@ -67,7 +67,7 @@ contract LiftoffRegistration is
                 launchTime + softCapTimer,
                 softCap,
                 hardCap,
-                totalSupplyWad,
+                fixedRate,
                 name,
                 symbol,
                 msg.sender

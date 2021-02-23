@@ -6,18 +6,16 @@ interface ILiftoffEngine {
         uint256 _endTime,
         uint256 _softCap,
         uint256 _hardCap,
-        uint256 _totalSupply,
+        uint256 _fixedRate,
         string calldata _name,
         string calldata _symbol,
         address _projectDev
     ) external returns (uint256 tokenId);
 
-    function igniteEth(uint256 _tokenSaleId) external payable;
-
     function ignite(
         uint256 _tokenSaleId,
         address _for,
-        uint256 _amountXEth
+        uint256 _amountBusd
     ) external;
 
     function undoIgnite(uint256 _tokenSaleId) external;

@@ -20,10 +20,10 @@ interface ILiftoffInsurance {
         uint256 claimedTokenLidPool
     ) external pure returns (uint256);
 
-    function getTotalXethClaimable(
+    function getTotalBusdClaimable(
         uint256 totalIgnited,
-        uint256 redeemedXEth,
-        uint256 claimedXEth,
+        uint256 redeemedBusd,
+        uint256 claimedBusd,
         uint256 cycles
     ) external pure returns (uint256);
 
@@ -36,10 +36,10 @@ interface ILiftoffInsurance {
         uint256 currentTime,
         uint256 startTime,
         uint256 insurancePeriod,
-        uint256 xEthValue,
-        uint256 baseXEth,
-        uint256 redeemedXEth,
-        uint256 claimedXEth,
+        uint256 busdValue,
+        uint256 baseBusd,
+        uint256 redeemedBusd,
+        uint256 claimedBusd,
         bool isUnwound
     ) external pure returns (bool);
 
@@ -50,10 +50,10 @@ interface ILiftoffInsurance {
             uint256 startTime,
             uint256 totalIgnited,
             uint256 tokensPerEthWad,
-            uint256 baseXEth,
+            uint256 baseBusd,
             uint256 baseTokenLidPool,
-            uint256 redeemedXEth,
-            uint256 claimedXEth,
+            uint256 redeemedBusd,
+            uint256 claimedBusd,
             uint256 claimedTokenLidPool
         );
 
