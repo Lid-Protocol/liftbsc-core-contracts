@@ -256,11 +256,12 @@ contract LiftoffEngine is
         );
 
         tokenSale.isSparked = true;
-        tokenSale.totalSupply = uint256(10000).mul(tokenSale.fixedRateWad).mul(
+        tokenSale.totalSupply =
+            uint256(10000).mul(tokenSale.fixedRateWad).mul(
                 tokenSale.totalIgnited
             ) /
             liftoffSettings.getTokenUserBP() /
-            (10**18);;
+            (10**18);
 
         uint256 busdBuy = _deploy(tokenSale);
         _allocateTokensPostDeploy(tokenSale);
