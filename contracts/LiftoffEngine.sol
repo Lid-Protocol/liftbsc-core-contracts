@@ -29,7 +29,7 @@ contract LiftoffEngine is
         uint256 endTime;
         uint256 softCap;
         uint256 hardCap;
-        uint256 fixedRate;
+        uint256 fixedRateWad;
         uint256 totalIgnited;
         uint256 totalSupply;
         uint256 rewardSupply;
@@ -59,7 +59,7 @@ contract LiftoffEngine is
         uint256 endTime,
         uint256 softCap,
         uint256 hardCap,
-        uint256 fixedRate,
+        uint256 fixedRateWad,
         string name,
         string symbol,
         address dev
@@ -106,7 +106,7 @@ contract LiftoffEngine is
         uint256 _endTime,
         uint256 _softCap,
         uint256 _hardCap,
-        uint256 _fixedRate,
+        uint256 _fixedRateWad,
         string calldata _name,
         string calldata _symbol,
         address _projectDev
@@ -119,14 +119,8 @@ contract LiftoffEngine is
         require(_startTime > now, "Must start in the future");
         require(_hardCap >= _softCap, "Hardcap must be at least softCap");
         require(_softCap >= 10 ether, "Softcap must be at least 10 ether");
-        require(
-            _fixedRate >= (10**9),
-            "FixedRate is less than minimum"
-        );
-        require(
-            _fixedRate <= (10**27),
-            "FixedRate is more than maximum"
-        );
+        require(_fixedRateWad >= (10**9), "FixedRateWad is less than minimum");
+        require(_fixedRateWad <= (10**27), "FixedRateWad is more than maximum");
 
         tokenId = totalTokenSales;
 
@@ -135,7 +129,7 @@ contract LiftoffEngine is
             endTime: _endTime,
             softCap: _softCap,
             hardCap: _hardCap,
-            fixedRate: _fixedRate,
+            fixedRateWad: _fixedRateWad,
             totalIgnited: 0,
             totalSupply: 0,
             rewardSupply: 0,
@@ -155,7 +149,7 @@ contract LiftoffEngine is
             _endTime,
             _softCap,
             _hardCap,
-            _fixedRate,
+            _fixedRateWad,
             _name,
             _symbol,
             _projectDev
@@ -262,10 +256,11 @@ contract LiftoffEngine is
         );
 
         tokenSale.isSparked = true;
-        tokenSale.totalSupply =  uint256(10000)
-                .mul(tokenSale.fixedRate / (10**18))
-                .mul(tokenSale.totalIgnited)
-                / liftoffSettings.getTokenUserBP();
+        tokenSale.totalSupply = uint256(10000).mul(tokenSale.fixedRateWad).mul(
+                tokenSale.totalIgnited
+            ) /
+            liftoffSettings.getTokenUserBP() /
+            (10**18);;
 
         uint256 busdBuy = _deploy(tokenSale);
         _allocateTokensPostDeploy(tokenSale);
@@ -444,12 +439,19 @@ contract LiftoffEngine is
             tokenSale.totalIgnited.mulBP(liftoffSettings.getBusdLockBP());
         busdBuy = tokenSale.totalIgnited.mulBP(liftoffSettings.getEthBuyBP());
 
-        address deployed = address(
-            new ERC20Blacklist(tokenSale.name, tokenSale.symbol, tokenSale.totalSupply, address(this))
-        );
+        address deployed =
+            address(
+                new ERC20Blacklist(
+                    tokenSale.name,
+                    tokenSale.symbol,
+                    tokenSale.totalSupply,
+                    address(this)
+                )
+            );
 
         //Lock symbol/busd liquidity
-        address pair = _lockLiquidity(tokenSale.totalSupply, busdLocked, deployed);
+        address pair =
+            _lockLiquidity(tokenSale.totalSupply, busdLocked, deployed);
 
         _swapExactBusdForTokens(
             busdBuy,
