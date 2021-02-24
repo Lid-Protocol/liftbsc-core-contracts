@@ -29,7 +29,6 @@ contract LiftoffEngine is
         uint256 endTime;
         uint256 softCap;
         uint256 hardCap;
-        uint256 fixedRateWad;
         uint256 totalIgnited;
         uint256 totalSupply;
         uint256 rewardSupply;
@@ -52,6 +51,7 @@ contract LiftoffEngine is
 
     mapping(uint256 => TokenSale) public tokens;
     uint256 public totalTokenSales;
+    mapping(uint256 => uint256) public fixedRateWads;
 
     event LaunchToken(
         uint256 tokenId,
@@ -129,7 +129,6 @@ contract LiftoffEngine is
             endTime: _endTime,
             softCap: _softCap,
             hardCap: _hardCap,
-            fixedRateWad: _fixedRateWad,
             totalIgnited: 0,
             totalSupply: 0,
             rewardSupply: 0,
@@ -140,6 +139,8 @@ contract LiftoffEngine is
             symbol: _symbol,
             isSparked: false
         });
+
+        fixedRateWads[tokenId] = _fixedRateWad;
 
         totalTokenSales++;
 
@@ -257,7 +258,7 @@ contract LiftoffEngine is
 
         tokenSale.isSparked = true;
         tokenSale.totalSupply =
-            uint256(10000).mul(tokenSale.fixedRateWad).mul(
+            uint256(10000).mul(fixedRateWads[_tokenSaleId]).mul(
                 tokenSale.totalIgnited
             ) /
             liftoffSettings.getTokenUserBP() /
