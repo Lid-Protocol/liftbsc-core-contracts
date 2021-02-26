@@ -19,6 +19,7 @@ interface ILiftoffSettings {
         address _liftoffPartnerships,
         address _BUSD,
         address _uniswapRouter,
+        address _uniswapFactory,
         address _lidTreasury,
         address _lidPoolManager
     ) external;
@@ -54,6 +55,10 @@ interface ILiftoffSettings {
     function setUniswapRouter(address _val) external;
 
     function getUniswapRouter() external view returns (address);
+
+    function setUniswapFactory(address _val) external;
+
+    function getUniswapFactory() external view returns (address);
 
     function setInsurancePeriod(uint256 _val) external;
 

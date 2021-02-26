@@ -28,6 +28,7 @@ contract LiftoffSettings is
     address private liftoffEngine;
     address private BUSD;
     address private uniswapRouter;
+    address private uniswapFactory;
 
     address private lidTreasury;
     address private lidPoolManager;
@@ -52,6 +53,7 @@ contract LiftoffSettings is
     event LogLiftoffPartnerships(address liftoffPartnerships);
     event LogBUSD(address BUSD);
     event LogUniswapRouter(address uniswapRouter);
+    event LogUniswapFactory(address uniswapFactory);
 
     function initialize() external initializer {
         OwnableUpgradeable.__Ownable_init();
@@ -80,6 +82,7 @@ contract LiftoffSettings is
         address _liftoffPartnerships,
         address _BUSD,
         address _uniswapRouter,
+        address _uniswapFactory,
         address _lidTreasury,
         address _lidPoolManager
     ) external override onlyOwner {
@@ -89,6 +92,7 @@ contract LiftoffSettings is
         setLiftoffPartnerships(_liftoffPartnerships);
         setBUSD(_BUSD);
         setUniswapRouter(_uniswapRouter);
+        setUniswapFactory(_uniswapFactory);
         setLidTreasury(_lidTreasury);
         setLidPoolManager(_lidPoolManager);
     }
@@ -170,6 +174,16 @@ contract LiftoffSettings is
 
     function getUniswapRouter() external view override returns (address) {
         return uniswapRouter;
+    }
+
+    function setUniswapFactory(address _val) public override onlyOwner {
+        uniswapFactory = _val;
+
+        emit LogUniswapFactory(uniswapFactory);
+    }
+
+    function getUniswapFactory() external view override returns (address) {
+        return uniswapFactory;
     }
 
     function setInsurancePeriod(uint256 _val) public override onlyOwner {

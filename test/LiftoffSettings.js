@@ -25,7 +25,7 @@ describe('LiftoffSettings', function () {
       650,
       2350
     );
-    expect(await liftoffSettings.getEthXLockBP()).to.equal(1200);
+    expect(await liftoffSettings.getBusdLockBP()).to.equal(1200);
     expect(await liftoffSettings.getTokenUserBP()).to.equal(5941);
     expect(await liftoffSettings.getInsurancePeriod()).to.equal(time.duration.days(7).toNumber());
     expect(await liftoffSettings.getBaseFeeBP()).to.equal(200);
@@ -41,9 +41,9 @@ describe('LiftoffSettings', function () {
       liftoffRegistration,
       liftoffEngine,
       liftoffPartnerships,
-      xEth,
-      xLocker,
+      busd,
       uniswapRouter,
+      uniswapFactory,
       lidTreasury,
       lidPoolManager
     ] = await ethers.getSigners();
@@ -52,9 +52,9 @@ describe('LiftoffSettings', function () {
       liftoffRegistration.address,
       liftoffEngine.address,
       liftoffPartnerships.address,
-      xEth.address,
-      xLocker.address,
+      busd.address,
       uniswapRouter.address,
+      uniswapFactory.address,
       lidTreasury.address,
       lidPoolManager.address
     );
@@ -62,16 +62,16 @@ describe('LiftoffSettings', function () {
     expect(await liftoffSettings.getLiftoffRegistration()).to.equal(liftoffRegistration.address);
     expect(await liftoffSettings.getLiftoffEngine()).to.equal(liftoffEngine.address);
     expect(await liftoffSettings.getLiftoffPartnerships()).to.equal(liftoffPartnerships.address);
-    expect(await liftoffSettings.getXEth()).to.equal(xEth.address);
-    expect(await liftoffSettings.getXLocker()).to.equal(xLocker.address);
+    expect(await liftoffSettings.getBUSD()).to.equal(busd.address);
     expect(await liftoffSettings.getUniswapRouter()).to.equal(uniswapRouter.address);
+    expect(await liftoffSettings.getUniswapFactory()).to.equal(uniswapFactory.address);
     expect(await liftoffSettings.getLidTreasury()).to.equal(lidTreasury.address);
     expect(await liftoffSettings.getLidPoolManager()).to.equal(lidPoolManager.address);
   });
  
-  it('set/get EthXLockBP', async function () {
-    await liftoffSettings.setEthXLockBP(1000);
-    expect(await liftoffSettings.getEthXLockBP()).to.equal(1000);
+  it('set/get BusdLockBP', async function () {
+    await liftoffSettings.setBusdLockBP(1000);
+    expect(await liftoffSettings.getBusdLockBP()).to.equal(1000);
   });
 
   it('set/get TokenUserBP', async function () {
@@ -103,22 +103,22 @@ describe('LiftoffSettings', function () {
     expect(await liftoffSettings.getLiftoffPartnerships()).to.equal(liftoffPartnerships.address);
   });
 
-  it('set/get XEth', async function () {
-    const [xEth] = await ethers.getSigners();
-    await liftoffSettings.setXEth(xEth.address);
-    expect(await liftoffSettings.getXEth()).to.equal(xEth.address);
-  });
-
-  it('set/get XLocker', async function () {
-    const [xLocker] = await ethers.getSigners();
-    await liftoffSettings.setXLocker(xLocker.address);
-    expect(await liftoffSettings.getXLocker()).to.equal(xLocker.address);
+  it('set/get BUSD', async function () {
+    const [busd] = await ethers.getSigners();
+    await liftoffSettings.setBUSD(busd.address);
+    expect(await liftoffSettings.getBUSD()).to.equal(busd.address);
   });
 
   it('set/get UniswapRouter', async function () {
     const [uniswapRouter] = await ethers.getSigners();
     await liftoffSettings.setUniswapRouter(uniswapRouter.address);
     expect(await liftoffSettings.getUniswapRouter()).to.equal(uniswapRouter.address);
+  });
+
+  it('set/get UniswapFactory', async function () {
+    const [uniswapFactory] = await ethers.getSigners();
+    await liftoffSettings.setUniswapFactory(uniswapFactory.address);
+    expect(await liftoffSettings.getUniswapFactory()).to.equal(uniswapFactory.address);
   });
 
   it('set/get InsurancePeriod', async function () {
@@ -138,12 +138,12 @@ describe('LiftoffSettings', function () {
     expect(await liftoffSettings.getLidPoolManager()).to.equal(lidPoolManager.address);
   });
 
-  it('setXethBP should revert if sum of BP params is less than 10000', async function () {
-    await expect(liftoffSettings.setXethBP(1000, 2000, 3000, 2000, 1000)).to.be.revertedWith("Must allocate 100% of eth raised");
+  it('setBusdBP should revert if sum of BP params is less than 10000', async function () {
+    await expect(liftoffSettings.setBusdBP(1000, 2000, 3000, 2000, 1000)).to.be.revertedWith("Must allocate 100% of eth raised");
   });
 
-  it('set/get XethBP Params', async function () {
-    await liftoffSettings.setXethBP(1000, 2000, 3000, 2000, 2000);
+  it('set/get BusdBP Params', async function () {
+    await liftoffSettings.setBusdBP(1000, 2000, 3000, 2000, 2000);
     expect(await liftoffSettings.getBaseFeeBP()).to.equal(1000);
     expect(await liftoffSettings.getEthBuyBP()).to.equal(2000);
     expect(await liftoffSettings.getProjectDevBP()).to.equal(3000);

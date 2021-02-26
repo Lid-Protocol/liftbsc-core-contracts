@@ -472,8 +472,7 @@ contract LiftoffEngine is
         uint256 wadBusd,
         address token
     ) internal returns (address pair) {
-        // Hardcode here or create a function in liftoffSettings to get _uniswapRouter
-        address _uniswapRouter = 0x0000000000000000000000000000000000000000;
+        address _uniswapRouter = liftoffSettings.getUniswapRouter();
         IERC20(token).approve(_uniswapRouter, wadToken);
 
         IERC20 busd = IERC20(liftoffSettings.getBUSD());
@@ -490,9 +489,7 @@ contract LiftoffEngine is
         uint256 wadToken,
         uint256 wadBusd
     ) internal returns (address pair) {
-        // Hardcode here or create a function in liftoffSettings to get _uniswapFactory
-        address _uniswapFactory = 0x0000000000000000000000000000000000000000;
-        pair = IUniswapV2Factory(_uniswapFactory).createPair(
+        pair = IUniswapV2Factory(liftoffSettings.getUniswapFactory()).createPair(
             address(busd),
             address(token)
         );

@@ -3,7 +3,6 @@ const { solidity } = require("ethereum-waffle");
 const { expect } = chai;
 const { ether, time } = require("@openzeppelin/test-helpers");
 const { UniswapDeployAsync } = require("../tools/UniswapDeployAsync");
-const { XLockDeployAsync } = require("../tools/XLockDeployAsync");
 const loadJsonFile = require('load-json-file');
 const settings = loadJsonFile.sync("./scripts/settings.json").networks.hardhat;
 
@@ -30,7 +29,6 @@ describe('LiftoffEngine', function () {
     upgrades.silenceWarnings();
 
     const { uniswapV2Router02, uniswapV2Factory } = await UniswapDeployAsync(ethers);
-    const { xEth, xLocker} = await XLockDeployAsync(ethers, sweepReceiver, uniswapV2Factory, uniswapV2Router02);
 
     LiftoffSettings = await ethers.getContractFactory("LiftoffSettings");
     liftoffSettings = await upgrades.deployProxy(LiftoffSettings, []);
@@ -44,8 +42,12 @@ describe('LiftoffEngine', function () {
     liftoffEngine = await upgrades.deployProxy(LiftoffEngine, [liftoffSettings.address], { unsafeAllowCustomTypes: true });
     await liftoffEngine.deployed();
 
+    BUSD = await ethers.getContractFactory("ERC20Blacklist");
+    busd = await BUSD.deploy("TestToken", "TKN", ether("1000").toString(), liftoffEngine.address);
+    await busd.deployed();
+
     await liftoffSettings.setAllUints(
-      settings.ethXLockBP,
+      settings.busdLockBP,
       settings.tokenUserBP,
       settings.insurancePeriod,
       settings.baseFeeBP,
@@ -60,9 +62,9 @@ describe('LiftoffEngine', function () {
       liftoffRegistration.address,
       liftoffEngine.address,
       liftoffPartnerships.address,
-      xEth.address,
-      xLocker.address,
+      busd.address,
       uniswapV2Router02.address,
+      uniswapV2Factory.address,
       lidTreasury.address,
       lidPoolManager.address
     );
@@ -80,7 +82,7 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.days(7).toNumber(),
             ether("1000").toString(),
             ether("3000").toString(),
-            ether("10000").toString(),
+            ether("10").toString(),
             "TestToken",
             "TKN",
             projectDev.address
@@ -97,7 +99,7 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.hours(1).toNumber(),
             ether("1000").toString(),
             ether("3000").toString(),
-            ether("10000").toString(),
+            ether("10").toString(),
             "TestToken",
             "TKN",
             projectDev.address
@@ -114,7 +116,7 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.days(7).toNumber(),
             ether("1000").toString(),
             ether("3000").toString(),
-            ether("10000").toString(),
+            ether("10").toString(),
             "TestToken",
             "TKN",
             projectDev.address
@@ -131,7 +133,7 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.days(7).toNumber(),
             ether("3000").toString(),
             ether("1000").toString(),
-            ether("10000").toString(),
+            ether("10").toString(),
             "TestToken",
             "TKN",
             projectDev.address
@@ -148,7 +150,7 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.days(7).toNumber(),
             ether("9").toString(),
             ether("3000").toString(),
-            ether("10000").toString(),
+            ether("10").toString(),
             "TestToken",
             "TKN",
             projectDev.address
@@ -156,7 +158,7 @@ describe('LiftoffEngine', function () {
         ).to.be.revertedWith("Softcap must be at least 10 ether");
       })
 
-      it("Should revert if TotalSupply is less than 1000 tokens", async function () {
+      it("Should revert if fixedRateWad is less than minimum", async function () {
         const currentTime = await time.latest();
         const contract = liftoffEngine.connect(liftoffRegistration);
         await expect(
@@ -165,15 +167,15 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.days(7).toNumber(),
             ether("1000").toString(),
             ether("3000").toString(),
-            ether("999").toString(),
+            ether("0.0000000009").toString(),
             "TestToken",
             "TKN",
             projectDev.address
           )
-        ).to.be.revertedWith("TotalSupply must be at least 1000 tokens");
+        ).to.be.revertedWith("FixedRateWad is less than minimum");
       })
-
-      it("Should revert if TotalSupply is more than 1 trillion tokens", async function () {
+  
+      it("Should revert if fixedRateWad is more than maximum", async function () {
         const currentTime = await time.latest();
         const contract = liftoffEngine.connect(liftoffRegistration);
         await expect(
@@ -182,12 +184,12 @@ describe('LiftoffEngine', function () {
             currentTime.toNumber() + time.duration.days(7).toNumber(),
             ether("1000").toString(),
             ether("3000").toString(),
-            ether("1000000000000").toString(),
+            ether("1000000000.1").toString(),
             "TestToken",
             "TKN",
             projectDev.address
           )
-        ).to.be.revertedWith("TotalSupply must be less than 1 trillion tokens");
+        ).to.be.revertedWith("FixedRateWad is more than maximum");
       })
     })
   })
@@ -201,17 +203,17 @@ describe('LiftoffEngine', function () {
         currentTime.toNumber() + time.duration.days(7).toNumber(),
         ether("500").toString(),
         ether("2000").toString(),
-        ether("10000").toString(),
+        ether("10").toString(),
         "TestToken",
         "TKN",
         projectDev.address
       )
     })
 
-    describe("igniteEth", function () {
+    describe("ignite", function () {
       it("Should revert if token not started yet", async function () {
         await expect(
-          liftoffEngine.igniteEth(tokenSaleId.value)
+          liftoffEngine.ignite(tokenSaleId.value, ignitor1.address, ether("300").toString())
         ).to.be.revertedWith("Not igniting.");
       })
     })
@@ -250,43 +252,59 @@ describe('LiftoffEngine', function () {
       await time.advanceBlock();
     })
     
-    describe("igniteEth", function () {
+    describe("ignite", function () {
       it("Should ignite", async function () {
         // first ignitor
-        let contract = liftoffEngine.connect(ignitor1);
-        await contract.igniteEth(
+        let contract = busd.connect(ignitor1);
+        // await contract.xlockerMint(ether("500").toString(), ignitor1.address);
+        await contract.approve(liftoffEngine.address, ether("300").toString());
+        contract = liftoffEngine.connect(ignitor1);
+        await contract.ignite(
           tokenSaleId.value,
-          { value: ether("300").toString() }
+          ignitor1.address,
+          ether("300").toString()
         );
 
         let tokenInfo = await liftoffEngine.getTokenSale(tokenSaleId.value);
         expect(tokenInfo.totalIgnited.toString()).to.equal(ether("300").toString());
 
         // second ignitor
+        contract = busd.connect(ignitor2);
+        // await contract.xlockerMint(ether("500").toString(), ignitor1.address);
+        await contract.approve(liftoffEngine.address, ether("200").toString());
         contract = liftoffEngine.connect(ignitor2);
-        await contract.igniteEth(
+        await contract.ignite(
           tokenSaleId.value,
-          { value: ether("200").toString() }
+          ignitor2.address,
+          ether("200").toString()
         );
 
         tokenInfo = await liftoffEngine.getTokenSale(tokenSaleId.value);
         expect(tokenInfo.totalIgnited.toString()).to.equal(ether("500").toString());
 
         // third ignitor
+        contract = busd.connect(ignitor3);
+        // await contract.xlockerMint(ether("500").toString(), ignitor1.address);
+        await contract.approve(liftoffEngine.address, ether("500").toString());
         contract = liftoffEngine.connect(ignitor3);
-        await contract.igniteEth(
+        await contract.ignite(
           tokenSaleId.value,
-          { value: ether("500").toString() }
+          ignitor3.address,
+          ether("500").toString()
         );
 
         tokenInfo = await liftoffEngine.getTokenSale(tokenSaleId.value);
         expect(tokenInfo.totalIgnited.toString()).to.equal(ether("1000").toString());
 
         // fourth ignitor
+        contract = busd.connect(ignitor4);
+        // await contract.xlockerMint(ether("500").toString(), ignitor1.address);
+        await contract.approve(liftoffEngine.address, ether("500").toString());
         contract = liftoffEngine.connect(ignitor4);
-        await contract.igniteEth(
+        await contract.ignite(
           tokenSaleId.value,
-          { value: ether("500").toString() }
+          ignitor4.address,
+          ether("500").toString()
         );
 
         tokenInfo = await liftoffEngine.getTokenSale(tokenSaleId.value);
@@ -302,7 +320,7 @@ describe('LiftoffEngine', function () {
 
         tokenInfo = await liftoffEngine.getTokenSale(tokenSaleId.value);
         expect(tokenInfo.totalIgnited.toString()).to.equal(ether("1000").toString());
-        expect((await xEth.balanceOf(ignitor4.address)).toString()).to.equal(ether("500").toString());
+        expect((await busd.balanceOf(ignitor4.address)).toString()).to.equal(ether("500").toString());
       })
     })
 
@@ -443,7 +461,7 @@ describe('LiftoffEngine', function () {
         currentTime.toNumber() + time.duration.days(1).toNumber(),
         ether("1000").toString(),
         ether("3000").toString(),
-        ether("10000").toString(),
+        ether("10").toString(),
         "TestToken",
         "TKN",
         projectDev.address
@@ -456,9 +474,8 @@ describe('LiftoffEngine', function () {
 
     describe("ignite", function () {
       it("Should ignite", async function () {
-        xEth.grantXethLockerRole(ignitor1.address);
-        let contract = xEth.connect(ignitor1);
-        await contract.xlockerMint(ether("500").toString(), ignitor1.address);
+        let contract = busd.connect(ignitor1);
+        // await contract.xlockerMint(ether("500").toString(), ignitor1.address);
         await contract.approve(liftoffEngine.address, ether("500").toString());
         contract = liftoffEngine.connect(ignitor1);
         await contract.ignite(
@@ -467,7 +484,7 @@ describe('LiftoffEngine', function () {
           ether("300").toString()
         );
 
-        expect((await xEth.balanceOf(ignitor1.address)).toString()).to.equal(ether("200").toString());
+        expect((await busd.balanceOf(ignitor1.address)).toString()).to.equal(ether("200").toString());
 
         let tokenInfo = await liftoffEngine.getTokenSale(1);
         expect(tokenInfo.totalIgnited.toString()).to.equal(ether("300").toString());
@@ -487,7 +504,7 @@ describe('LiftoffEngine', function () {
         );
         await time.advanceBlock();
         await liftoffEngine.claimRefund(1, ignitor2.address);
-        expect((await xEth.balanceOf(ignitor2.address)).toString()).to.equal(ether("300").toString());
+        expect((await busd.balanceOf(ignitor2.address)).toString()).to.equal(ether("300").toString());
       })
 
       it("revert if ignitor already refunded", async function () {
