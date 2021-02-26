@@ -13,6 +13,7 @@ import "@openzeppelin/contracts-upgradeable/math/MathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
+import "hardhat/console.sol";
 
 contract LiftoffEngine is
     ILiftoffEngine,
@@ -263,7 +264,6 @@ contract LiftoffEngine is
             ) /
             liftoffSettings.getTokenUserBP() /
             (10**18);
-
         uint256 busdBuy = _deploy(tokenSale);
         _allocateTokensPostDeploy(tokenSale);
         _insuranceRegistration(tokenSale, _tokenSaleId, busdBuy);
@@ -520,9 +520,13 @@ contract LiftoffEngine is
             deployed.balanceOf(address(this)).sub(tokenSale.rewardSupply);
         address liftoffInsurance = liftoffSettings.getLiftoffInsurance();
         deployed.transfer(liftoffInsurance, toInsurance);
-        IERC20(liftoffSettings.getBUSD()).transfer(
+        
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
+        uint256 amount = tokenSale.totalIgnited.sub(_busdBuy);
+        busd.approve(liftoffInsurance, amount);
+        busd.transfer(
             liftoffInsurance,
-            tokenSale.totalIgnited.sub(_busdBuy)
+            amount
         );
 
         ILiftoffInsurance(liftoffInsurance).register(_tokenSaleId);
