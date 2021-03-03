@@ -521,8 +521,10 @@ contract LiftoffEngine is
         address liftoffInsurance = liftoffSettings.getLiftoffInsurance();
         deployed.transfer(liftoffInsurance, toInsurance);
         
+        uint256 busdLocked =
+            tokenSale.totalIgnited.mulBP(liftoffSettings.getBusdLockBP());
         IERC20 busd = IERC20(liftoffSettings.getBUSD());
-        uint256 amount = tokenSale.totalIgnited.sub(_busdBuy);
+        uint256 amount = tokenSale.totalIgnited.sub(_busdBuy).sub(busdLocked);
         busd.approve(liftoffInsurance, amount);
         busd.transfer(
             liftoffInsurance,
