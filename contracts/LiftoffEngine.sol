@@ -452,14 +452,9 @@ contract LiftoffEngine is
             );
 
         //Lock symbol/busd liquidity
+        uint256 lockedTokens = tokenSale.totalSupply.mul(busdBuy).div(busdLocked);
         address pair =
-            _lockLiquidity(tokenSale.totalSupply, busdLocked, deployed);
-
-        _swapExactBusdForTokens(
-            busdBuy,
-            IERC20(liftoffSettings.getBUSD()),
-            IUniswapV2Pair(pair)
-        );
+            _lockLiquidity(tokenSale.totalSupply.sub(), busdLocked.add(busdBuy), deployed);
 
         tokenSale.pair = pair;
         tokenSale.deployed = deployed;
