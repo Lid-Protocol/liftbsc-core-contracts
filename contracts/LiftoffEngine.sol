@@ -6,7 +6,6 @@ import "./interfaces/ILiftoffInsurance.sol";
 import "./library/BasisPoints.sol";
 import "./ERC20/ERC20Blacklist.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
-import "@uniswap/v2-periphery/contracts/libraries/UniswapV2Library.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/math/MathUpgradeable.sol";
@@ -452,9 +451,9 @@ contract LiftoffEngine is
             );
 
         //Lock symbol/busd liquidity
-        uint256 lockedTokens = tokenSale.totalSupply.mul(busdBuy).div(busdLocked);
+        uint256 lockedTokens = tokenSale.totalSupply.mul(busdLocked).div(busdBuy.add(busdLocked));
         address pair =
-            _lockLiquidity(tokenSale.totalSupply.sub(), busdLocked.add(busdBuy), deployed);
+            _lockLiquidity(lockedTokens, busdLocked.add(busdBuy), deployed);
 
         tokenSale.pair = pair;
         tokenSale.deployed = deployed;
@@ -537,23 +536,5 @@ contract LiftoffEngine is
         Ignitor storage ignitor = tokenSale.ignitors[_for];
         ignitor.ignited = ignitor.ignited.add(toIgnite);
         tokenSale.totalIgnited = tokenSale.totalIgnited.add(toIgnite);
-    }
-
-    //WARNING: Not tested with transfer tax tokens. Will probably fail with such.
-    function _swapExactBusdForTokens(
-        uint256 amountIn,
-        IERC20 busd,
-        IUniswapV2Pair pair
-    ) internal {
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        bool token0IsBusd = pair.token0() == address(busd);
-        (uint256 reserveIn, uint256 reserveOut) =
-            token0IsBusd ? (reserve0, reserve1) : (reserve1, reserve0);
-        uint256 amountOut =
-            UniswapV2Library.getAmountOut(amountIn, reserveIn, reserveOut);
-        require(busd.transfer(address(pair), amountIn), "Transfer failed");
-        (uint256 amount0Out, uint256 amount1Out) =
-            token0IsBusd ? (uint256(0), amountOut) : (amountOut, uint256(0));
-        pair.swap(amount0Out, amount1Out, address(this), new bytes(0));
     }
 }
