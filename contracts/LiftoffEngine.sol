@@ -466,11 +466,8 @@ contract LiftoffEngine is
         uint256 wadBusd,
         address token
     ) internal returns (address pair) {
-        address _uniswapRouter = liftoffSettings.getUniswapRouter();
-        IERC20(token).approve(_uniswapRouter, wadToken);
 
         IERC20 busd = IERC20(liftoffSettings.getBUSD());
-        busd.approve(_uniswapRouter, wadBusd);
 
         pair = _addLiquidity(IERC20(token), busd, wadToken, wadBusd);
 
@@ -493,7 +490,7 @@ contract LiftoffEngine is
 
         require(token.transfer(pair, wadToken), "Transfer Failed");
         require(busd.transfer(pair, wadBusd), "Transfer Failed");
-        IUniswapV2Pair(pair).mint(address(0x0));
+        IUniswapV2Pair(pair).mint(address(liftoffSettings.getLiftoffInsurance()));
     }
 
     function _allocateTokensPostDeploy(TokenSale storage tokenSale) internal {
