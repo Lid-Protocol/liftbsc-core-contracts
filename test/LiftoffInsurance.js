@@ -495,12 +495,11 @@ describe('LiftoffInsurance', function () {
         time.duration.days(1)
       );
       await time.advanceBlock();
-
       await busd.transfer(ignitor1.address, ether("30").toString());
       let contract = busd.connect(ignitor1);
       await contract.approve(liftoffEngine.address, ether("30").toString());
       await liftoffEngine.connect(ignitor1).ignite(
-        tokenSaleId.value,
+        tokenSaleId,
         ignitor1.address,
         ether("30").toString()
       );
@@ -508,7 +507,7 @@ describe('LiftoffInsurance', function () {
       contract = busd.connect(ignitor2);
       await contract.approve(liftoffEngine.address, ether("20").toString());
       await liftoffEngine.connect(ignitor2).ignite(
-        tokenSaleId.value,
+        tokenSaleId,
         ignitor2.address,
         ether("20").toString()
       );
@@ -516,7 +515,7 @@ describe('LiftoffInsurance', function () {
       contract = busd.connect(ignitor3);
       await contract.approve(liftoffEngine.address, ether("60").toString());
       await liftoffEngine.connect(ignitor3).ignite(
-        tokenSaleId.value,
+        tokenSaleId,
         ignitor3.address,
         ether("60").toString()
       );
@@ -592,18 +591,18 @@ describe('LiftoffInsurance', function () {
         let busdPartnr1 = await busd.balanceOf(partner1.address);
         let busdPartnr2 = await busd.balanceOf(partner2.address);
         let busdtrsrDlt = busdLidTrsr.sub(busdLidTrsrInitial);
-        expect(busdProjDev).to.be.bignumber.gt(ether("2.1").toString());
-        expect(busdProjDev).to.be.bignumber.lt(ether("2.2").toString());
+        expect(busdProjDev).to.be.bignumber.gt(ether("3.4").toString());
+        expect(busdProjDev).to.be.bignumber.lt(ether("3.5").toString());
         expect(busdProjDev).to.be.bignumber.eq(
           totalMaxClaim.mul(settings.projectDevBP-150-200).div(10000).div(10)
         );
-        expect(busdtrsrDlt).to.be.bignumber.gt(ether("0.15").toString());
-        expect(busdtrsrDlt).to.be.bignumber.lt(ether("0.16").toString());
+        expect(busdtrsrDlt).to.be.bignumber.gt(ether("0.16").toString());
+        expect(busdtrsrDlt).to.be.bignumber.lt(ether("0.17").toString());
         expect(busdtrsrDlt).to.be.bignumber.eq(
           totalMaxClaim.mul(settings.mainFeeBP).div(10000).div(10)
         );
-        expect(busdPoolBal).to.be.bignumber.gt(ether("1.0").toString());
-        expect(busdPoolBal).to.be.bignumber.lt(ether("1.1").toString());
+        expect(busdPoolBal).to.be.bignumber.gt(ether("0.27").toString());
+        expect(busdPoolBal).to.be.bignumber.lt(ether("0.28").toString());
         expect(busdPoolBal).to.be.bignumber.eq(
           totalMaxClaim.mul(settings.lidPoolBP).div(10000).div(10)
         );

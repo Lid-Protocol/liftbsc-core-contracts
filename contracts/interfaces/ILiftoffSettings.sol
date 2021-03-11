@@ -24,8 +24,6 @@ interface ILiftoffSettings {
         address _lidPoolManager
     ) external;
 
-    function setBusdLockBP(uint256 _val) external;
-
     function getBusdLockBP() external view returns (uint256);
 
     function setTokenUserBP(uint256 _val) external;
@@ -73,6 +71,7 @@ interface ILiftoffSettings {
     function getLidPoolManager() external view returns (address);
 
     function setBusdBP(
+        uint256 _busdLockBP,
         uint256 _baseFeeBP,
         uint256 _ethBuyBP,
         uint256 _projectDevBP,

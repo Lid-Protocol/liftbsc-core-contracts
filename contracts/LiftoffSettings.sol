@@ -35,10 +35,10 @@ contract LiftoffSettings is
 
     address private liftoffPartnerships;
 
-    event LogBusdLockBP(uint256 busdLockBP);
     event LogTokenUserBP(uint256 tokenUserBP);
     event LogInsurancePeriod(uint256 insurancePeriod);
     event LogBusdBP(
+        uint256 busdLockBP,
         uint256 baseFee,
         uint256 ethBuyBP,
         uint256 projectDevBP,
@@ -69,10 +69,9 @@ contract LiftoffSettings is
         uint256 _mainFeeBP,
         uint256 _lidPoolBP
     ) external override onlyOwner {
-        setBusdLockBP(_busdLockBP);
         setTokenUserBP(_tokenUserBP);
         setInsurancePeriod(_insurancePeriod);
-        setBusdBP(_baseFeeBP, _ethBuyBP, _projectDevBP, _mainFeeBP, _lidPoolBP);
+        setBusdBP(_busdLockBP, _baseFeeBP, _ethBuyBP, _projectDevBP, _mainFeeBP, _lidPoolBP);
     }
 
     function setAllAddresses(
@@ -95,12 +94,6 @@ contract LiftoffSettings is
         setUniswapFactory(_uniswapFactory);
         setLidTreasury(_lidTreasury);
         setLidPoolManager(_lidPoolManager);
-    }
-
-    function setBusdLockBP(uint256 _val) public override onlyOwner {
-        busdLockBP = _val;
-
-        emit LogBusdLockBP(busdLockBP);
     }
 
     function getBusdLockBP() external view override returns (uint256) {
@@ -217,6 +210,7 @@ contract LiftoffSettings is
     }
 
     function setBusdBP(
+        uint256 _busdLockBP,
         uint256 _baseFeeBP,
         uint256 _ethBuyBP,
         uint256 _projectDevBP,
@@ -224,18 +218,19 @@ contract LiftoffSettings is
         uint256 _lidPoolBP
     ) public override onlyOwner {
         require(
-            _baseFeeBP.add(_ethBuyBP).add(_projectDevBP).add(_mainFeeBP).add(
+            _busdLockBP.add(_baseFeeBP).add(_ethBuyBP).add(_projectDevBP).add(_mainFeeBP).add(
                 _lidPoolBP
             ) == 10000,
             "Must allocate 100% of eth raised"
         );
+        busdLockBP = _busdLockBP;
         baseFee = _baseFeeBP;
         ethBuyBP = _ethBuyBP;
         projectDevBP = _projectDevBP;
         mainFeeBP = _mainFeeBP;
         lidPoolBP = _lidPoolBP;
 
-        emit LogBusdBP(baseFee, ethBuyBP, projectDevBP, mainFeeBP, lidPoolBP);
+        emit LogBusdBP(busdLockBP, baseFee, ethBuyBP, projectDevBP, mainFeeBP, lidPoolBP);
     }
 
     function getBaseFeeBP() external view override returns (uint256) {

@@ -390,8 +390,8 @@ describe('LiftoffEngine', function () {
      describe("getTokenSale", function() {
         it("Should get correct total supply", async function () {
           let tokenInfo = await liftoffEngine.getTokenSale(tokenSaleId.value);
-          expect(tokenInfo.totalSupply.toString()).to.be.bignumber.above(ether("16496").toString());
-          expect(tokenInfo.totalSupply.toString()).to.be.bignumber.below(ether("16497").toString());
+          expect(tokenInfo.totalSupply.toString()).to.be.bignumber.above(ether("12608").toString());
+          expect(tokenInfo.totalSupply.toString()).to.be.bignumber.below(ether("12609").toString());
         })
       })
 
@@ -402,8 +402,8 @@ describe('LiftoffEngine', function () {
          expect(tokenInfo.totalIgnited.toString()).to.equal(ether("1000").toString());
          expect(tokenInfo.pair.toString()).to.be.properAddress;
          expect(tokenInfo.deployed.toString()).to.be.properAddress;
-         expect(tokenInfo.rewardSupply.toString()).to.be.bignumber.above(ether("5529").toString());
-         expect(tokenInfo.rewardSupply.toString()).to.be.bignumber.below(ether("5530").toString());
+         expect(tokenInfo.rewardSupply.toString()).to.be.bignumber.above(ether("8620").toString());
+         expect(tokenInfo.rewardSupply.toString()).to.be.bignumber.below(ether("8621").toString());
        })
      })
 
@@ -430,8 +430,8 @@ describe('LiftoffEngine', function () {
         // ignitor1 ignited 300ETH of total 1000ETH
         // ignite1's rewards = 300 * rewardSupply / 1000
         const token = await ethers.getContractAt("ERC20Blacklist", deployed);
-        expect((await token.balanceOf(ignitor1.address)).toString()).to.be.bignumber.above(ether("1658").toString());
-        expect((await token.balanceOf(ignitor1.address)).toString()).to.be.bignumber.below(ether("1659").toString());
+        expect((await token.balanceOf(ignitor1.address)).toString()).to.be.bignumber.above(ether("2586").toString());
+        expect((await token.balanceOf(ignitor1.address)).toString()).to.be.bignumber.below(ether("2587").toString());
       })
 
       it("revert if ignitor already claimed", async function () {

@@ -124,11 +124,6 @@ contract LiftoffInsurance is
         ) {
             //Trigger unwind
             tokenInsurance.isUnwound = true;
-            // IXLocker(liftoffSettings.getXLocker()).setBlacklistUniswapBuys(
-            //     tokenInsurance.pair,
-            //     address(token),
-            //     true
-            // );
         }
 
         if (tokenInsurance.isUnwound) {
