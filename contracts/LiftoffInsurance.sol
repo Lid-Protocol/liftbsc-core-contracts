@@ -33,6 +33,7 @@ contract LiftoffInsurance is
         uint256 redeemedBusd;
         uint256 claimedBusd;
         uint256 claimedTokenLidPool;
+        uint256 claimedCycle;
         address pair;
         address deployed;
         address projectDev;
@@ -45,6 +46,7 @@ contract LiftoffInsurance is
     mapping(uint256 => TokenInsurance) public tokenInsurances;
     mapping(uint256 => bool) public tokenIsRegistered;
     mapping(uint256 => bool) public insuranceIsInitialized;
+    mapping(uint256 => uint256) public tokenIdBonusInsurance;
 
     event Register(uint256 tokenId);
     event CreateInsurance(
@@ -58,7 +60,7 @@ contract LiftoffInsurance is
         address dev
     );
     event ClaimBaseFee(uint256 tokenId, uint256 baseFee);
-    event Claim(uint256 tokenId, uint256 BusdClaimed, uint256 tokenClaimed);
+    event Claim(uint256 tokenId, uint256 BusdClaimed, uint256 tokenClaimed, uint256 cycles);
     event Redeem(uint256 tokenId, uint256 redeemEth);
 
     function initialize(ILiftoffSettings _liftoffSettings)
@@ -92,6 +94,12 @@ contract LiftoffInsurance is
             insuranceIsInitialized[_tokenSaleId],
             "Insurance not initialized"
         );
+
+        if (tokenIdBonusInsurance[_tokenSaleId] > 0) {
+            tokenIdBonusInsurance[_tokenSaleId] -= _amount;
+            if (tokenIdBonusInsurance[_tokenSaleId] < 0)
+                tokenIdBonusInsurance[_tokenSaleId] = 0;
+        }
 
         IERC20 token = IERC20(tokenInsurance.deployed);
         IERC20 busd = IERC20(liftoffSettings.getBUSD());
@@ -165,6 +173,12 @@ contract LiftoffInsurance is
 
         //For first 7 days, only claim base fee
         require(cycles > 0, "Cannot claim until after first cycle ends.");
+        //Prevent multiple claimes in the same cycle period
+        require(
+            tokenInsurance.claimedCycle < cycles,
+            "Already claimed for this cycle."
+        );
+        tokenInsurance.claimedCycle = cycles;
 
         uint256 totalBusdClaimed =
             _bUsdClaimDistribution(tokenInsurance, _tokenSaleId, cycles, busd);
@@ -172,7 +186,7 @@ contract LiftoffInsurance is
         uint256 totalTokenClaimed =
             _tokenClaimDistribution(tokenInsurance, cycles);
 
-        emit Claim(_tokenSaleId, totalBusdClaimed, totalTokenClaimed);
+        emit Claim(_tokenSaleId, totalBusdClaimed, totalTokenClaimed, cycles);
     }
 
     function createInsurance(uint256 _tokenSaleId) external override {
@@ -215,6 +229,7 @@ contract LiftoffInsurance is
             redeemedBusd: 0,
             claimedBusd: 0,
             claimedTokenLidPool: 0,
+            claimedCycle: 0,
             pair: pair,
             deployed: deployed,
             projectDev: projectDev,
@@ -350,6 +365,12 @@ contract LiftoffInsurance is
         uint256 totalMaxClaim = totalFinalClaim.mul(cycles).div(10); //10 periods hardcoded
         if (totalMaxClaim > totalFinalClaim) totalMaxClaim = totalFinalClaim;
         return totalMaxClaim;
+    }
+
+    function increaseInsuranceBonus(uint256 tokenId, uint256 wad) external onlyOwner override {
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
+        require(busd.transferFrom(msg.sender, address(this), wad), "Transfer failed");
+        tokenIdBonusInsurance[tokenId] += wad;
     }
 
     function _pullTokensForRedeem(

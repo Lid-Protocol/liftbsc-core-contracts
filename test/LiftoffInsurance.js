@@ -460,6 +460,7 @@ describe('LiftoffInsurance', function () {
         let tokenBalance = await token.balanceOf(ignitor3.address);
         await liftoffInsurance.connect(ignitor3).redeem(tokenSaleId.value, tokenBalance.div(2));
         tokenBalance = await token.balanceOf(ignitor3.address);
+        // Following redeem doesn't work atm since insurance doesn't have enough busd to pay even though swap happened
         await liftoffInsurance.connect(ignitor3).redeem(tokenSaleId.value, tokenBalance);
         const busdBalance = await busd.balanceOf(ignitor3.address);
         const tokenInsuranceOthers = await liftoffInsurance.getTokenInsuranceOthers(tokenSaleId.value);
@@ -615,6 +616,20 @@ describe('LiftoffInsurance', function () {
         expect(busdPartnr2).to.be.bignumber.lt(ether("0.11").toString());
         expect(busdPartnr2).to.be.bignumber.eq(
           totalMaxClaim.mul(200).div(10000).div(10)
+        );
+      });
+      it("Should revert if double claim in the same cycle",async function() {
+        await expect(
+          liftoffInsurance.claim(1)
+        ).to.be.revertedWith("Already claimed for this cycle.");
+      });
+      it("Should work for cycle2 claim",async function() {
+        await time.increase(
+          time.duration.days(7)
+        );
+        await time.advanceBlock();
+        await expect(
+          liftoffInsurance.claim(1)
         );
       });
     });
