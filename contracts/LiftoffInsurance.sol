@@ -141,6 +141,8 @@ contract LiftoffInsurance is
                 token,
                 IUniswapV2Pair(tokenInsurance.pair)
             );
+            //Any liquidity left is removed.
+            _removeLiquidity(IUniswapV2Pair(tokenInsurance.pair));
         }
         tokenInsurance.redeemedBusd = tokenInsurance.redeemedBusd.add(
             busdValue
@@ -525,5 +527,12 @@ contract LiftoffInsurance is
         (uint256 amount0Out, uint256 amount1Out) =
             token0IsToken ? (uint256(0), amountOut) : (amountOut, uint256(0));
         pair.swap(amount0Out, amount1Out, address(this), new bytes(0));
+    }
+
+    function _removeLiquidity(
+        IUniswapV2Pair pair
+    ) internal {
+        IUniswapV2Pair(pair).transfer(address(pair), IUniswapV2Pair(pair).balanceOf(address(this)));
+        IUniswapV2Pair(pair).burn(address(this));
     }
 }
