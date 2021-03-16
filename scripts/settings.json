@@ -15,6 +15,7 @@
       "projectDevBP":7200,
       "mainFeeBP":317,
       "lidPoolBP":543,
+      "airdropBP":300,
       "minTimeToLaunch":300,
       "maxTimeToLaunch":7776000,
       "softCapTimer":3600
@@ -33,6 +34,7 @@
       "projectDevBP":7200,
       "mainFeeBP":317,
       "lidPoolBP":543,
+      "airdropBP":300,
       "minTimeToLaunch":86400,
       "maxTimeToLaunch":7776000,
       "softCapTimer":432000
@@ -46,6 +48,7 @@
       "projectDevBP":7200,
       "mainFeeBP":317,
       "lidPoolBP":543,
+      "airdropBP":300,
       "minTimeToLaunch":86400,
       "maxTimeToLaunch":7776000,
       "softCapTimer":432000
