@@ -15,6 +15,7 @@ async function main() {
     const LiftoffEngine = await ethers.getContractFactory("LiftoffEngine")
     const LiftoffInsurance = await ethers.getContractFactory("LiftoffInsurance")
     const LiftoffRegistration = await ethers.getContractFactory("LiftoffRegistration")
+    const LiftoffPartnerships = await ethers.getContractFactory("LiftoffPartnerships")
 
     console.log("Starting deployments...")
 
@@ -30,6 +31,10 @@ async function main() {
     await liftoffInsurance.deployed()
     console.log("LiftoffInsurance deployed to:", liftoffInsurance.address)
 
+    const liftoffPartnerships = await upgrades.deployProxy(LiftoffPartnerships, [addresses.LiftoffSettings], {unsafeAllowCustomTypes: true});
+    await liftoffPartnerships.deployed();
+    console.log("LiftoffPartnerships deployed to:", liftoffPartnerships.address);
+
     const liftoffRegistration = await upgrades.deployProxy(LiftoffRegistration, [
         settings.minTimeToLaunch,
         settings.maxTimeToLaunch,
@@ -41,7 +46,7 @@ async function main() {
 
     console.log("setting uints")
     await liftoffSettings.setAllUints(
-      settings.ethXLockBP,
+      settings.busdLockBP,
       settings.tokenUserBP,
       settings.insurancePeriod,
       settings.baseFeeBP,
@@ -56,9 +61,10 @@ async function main() {
       liftoffInsurance.address,
       liftoffRegistration.address,
       liftoffEngine.address,
-      settings.xEth,
-      settings.xLocker,
+      liftoffPartnerships.address,
+      settings.busd,
       settings.uniswapRouter,
+      settings.uniswapFactory,
       settings.lidTreasury,
       settings.lidPoolManager
     )
