@@ -311,6 +311,20 @@ describe('LiftoffInsurance', function () {
         ).to.be.revertedWith("Cannot create insurance")
       });
     });
+    describe("increaseInsuranceBonus", function() {
+      it("should revert if not owner", async function() {
+        await expect(
+          liftoffInsurance.connect(ignitor1).increaseInsuranceBonus(0, ignitor1.address, 100)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+      });
+    });
+    describe("decreaseInsuranceBonus", function() {
+      it("should revert if not owner", async function() {
+        await expect(
+          liftoffInsurance.connect(ignitor1).decreaseInsuranceBonus(0, ignitor1.address, 100)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+      });
+    });
   });
   describe("State: Cycle 0", function() {
     let tokenInsurance, tokenSale;
@@ -461,14 +475,13 @@ describe('LiftoffInsurance', function () {
         await liftoffInsurance.connect(ignitor3).redeem(tokenSaleId.value, tokenBalance.div(2));
         tokenBalance = await token.balanceOf(ignitor3.address);
         // Following redeem doesn't work atm since insurance doesn't have enough busd to pay even though swap happened
+        const preBusdBalance = await busd.balanceOf(ignitor3.address);
         await liftoffInsurance.connect(ignitor3).redeem(tokenSaleId.value, tokenBalance);
-        const busdBalance = await busd.balanceOf(ignitor3.address);
         const tokenInsuranceOthers = await liftoffInsurance.getTokenInsuranceOthers(tokenSaleId.value);
-        const expectedRedeemValue = ethers.utils.parseEther("500")
-          .mul(10000-settings.baseFeeBP)
-          .div(10000)
-        expect(busdBalance).to.be.lt(expectedRedeemValue);
-        expect(busdBalance).to.be.gt(expectedRedeemValue.sub(100));
+        const tokenInsuranceUnits = await liftoffInsurance.getTokenInsuranceUints(tokenSaleId.value);
+        const expectedRedeemValue = await liftoffInsurance.getRedeemValue(tokenBalance, tokenInsuranceUnits.tokensPerEthWad);
+        const busdBalance = await busd.balanceOf(ignitor3.address);
+        expect(busdBalance).to.be.bignumber.equal(preBusdBalance.add(expectedRedeemValue));
         expect(tokenInsuranceOthers.isUnwound).to.be.true;
       });
     });
@@ -578,6 +591,45 @@ describe('LiftoffInsurance', function () {
         await expect(
           liftoffInsurance.connect(ignitor3).redeem(1,tokenBalance3)
         ).to.be.revertedWith("Redeem request exceeds available insurance.");
+      });
+      it("Should redeem from bonusInsurance if it has positive amount", async function() {
+        // check increaseInsuranceBonus
+        const basicBusdBalanceInInsurance = await busd.balanceOf(liftoffInsurance.address);
+        let preBusdBalanceInInsurance = basicBusdBalanceInInsurance;
+        await busd.connect(ignitor3).approve(liftoffInsurance.address, ethers.constants.MaxUint256);
+        await liftoffInsurance.increaseInsuranceBonus(1, ignitor3.address, ether("40").toString());
+        let busdBalanceInInsurance = await busd.balanceOf(liftoffInsurance.address);
+        expect(busdBalanceInInsurance).to.be.bignumber.equal(preBusdBalanceInInsurance.add(ether("40").toString()));
+
+        // check decreaseInsuranceBonus
+        preBusdBalanceInInsurance = busdBalanceInInsurance;
+        await liftoffInsurance.decreaseInsuranceBonus(1, ignitor3.address, ether("5").toString());
+        busdBalanceInInsurance = await busd.balanceOf(liftoffInsurance.address);
+        expect(busdBalanceInInsurance).to.be.bignumber.equal(preBusdBalanceInInsurance.sub(ether("5").toString()));
+
+        // In case of bonusInsurance amount is bigger than getRedeemValue
+        let tokenBalance = await token.balanceOf(ignitor3.address);
+        const tokenInsuranceUnits = await liftoffInsurance.getTokenInsuranceUints(1);
+        let expectedBusdValue = await liftoffInsurance.getRedeemValue(tokenBalance.div(2), tokenInsuranceUnits.tokensPerEthWad);
+        let expectedBusdBalanceInIgnitor3 = (await busd.balanceOf(ignitor3.address)).add(expectedBusdValue);
+        await liftoffInsurance.connect(ignitor3).redeem(1, tokenBalance.div(2));
+        let busdBalanceInIgnitor3 = await busd.balanceOf(ignitor3.address);
+        expect(busdBalanceInIgnitor3).to.be.bignumber.equal(expectedBusdBalanceInIgnitor3);
+
+        // In case of bonusInsurance amount is less than getRedeemValue
+        // check busd balance
+        tokenBalance = await token.balanceOf(ignitor3.address);
+        expectedBusdValue = (await busd.balanceOf(liftoffInsurance.address)).sub(basicBusdBalanceInInsurance);
+        expectedBusdBalanceInIgnitor3 = (await busd.balanceOf(ignitor3.address)).add(expectedBusdValue);
+        await liftoffInsurance.connect(ignitor3).redeem(1,tokenBalance);
+        busdBalanceInIgnitor3 = await busd.balanceOf(ignitor3.address);
+        expect(busdBalanceInIgnitor3).to.be.bignumber.equal(expectedBusdBalanceInIgnitor3);
+
+        // check token balance
+        const expectedTokenValue = expectedBusdValue.mul(tokenInsuranceUnits.tokensPerEthWad).div(ether("1").toString());
+        const preTokenBalance = tokenBalance;
+        tokenBalance = await token.balanceOf(ignitor3.address);
+        expect(tokenBalance).to.be.bignumber.equal(preTokenBalance.sub(expectedTokenValue));
       });
     });
     describe("claim", function() {

@@ -95,17 +95,27 @@ contract LiftoffInsurance is
             "Insurance not initialized"
         );
 
-        if (tokenIdBonusInsurance[_tokenSaleId] > 0) {
-            tokenIdBonusInsurance[_tokenSaleId] -= _amount;
-            if (tokenIdBonusInsurance[_tokenSaleId] < 0)
-                tokenIdBonusInsurance[_tokenSaleId] = 0;
-        }
+        uint busdValue = getRedeemValue(
+            _amount,
+            tokenInsurance.tokensPerEthWad
+        );
 
         IERC20 token = IERC20(tokenInsurance.deployed);
         IERC20 busd = IERC20(liftoffSettings.getBUSD());
 
-        uint256 busdValue =
+        if (tokenIdBonusInsurance[_tokenSaleId] > 0) {
+            if(tokenIdBonusInsurance[_tokenSaleId] < busdValue) {
+                busdValue = tokenIdBonusInsurance[_tokenSaleId];
+                _amount = busdValue.mul(tokenInsurance.tokensPerEthWad).div(1 ether);
+            }
+            tokenIdBonusInsurance[_tokenSaleId] = tokenIdBonusInsurance[_tokenSaleId].sub(busdValue);
             _pullTokensForRedeem(tokenInsurance, token, _amount);
+            require(busd.transfer(msg.sender, busdValue), "Transfer failed.");
+            emit Redeem(_tokenSaleId, busdValue);
+            return;
+        }
+
+        _pullTokensForRedeem(tokenInsurance, token, _amount);
 
         require(
             !isInsuranceExhausted(
@@ -369,17 +379,23 @@ contract LiftoffInsurance is
         return totalMaxClaim;
     }
 
-    function increaseInsuranceBonus(uint256 tokenId, uint256 wad) external onlyOwner override {
+    function increaseInsuranceBonus(uint256 tokenId, address from, uint256 wad) external onlyOwner override {
         IERC20 busd = IERC20(liftoffSettings.getBUSD());
-        require(busd.transferFrom(msg.sender, address(this), wad), "Transfer failed");
-        tokenIdBonusInsurance[tokenId] += wad;
+        require(busd.transferFrom(from, address(this), wad), "Transfer failed");
+        tokenIdBonusInsurance[tokenId] = tokenIdBonusInsurance[tokenId].add(wad);
+    }
+
+    function decreaseInsuranceBonus(uint256 tokenId, address to, uint256 wad) external onlyOwner override {
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
+        require(busd.transfer(to, wad), "Transfer failed");
+        tokenIdBonusInsurance[tokenId] = tokenIdBonusInsurance[tokenId].sub(wad);
     }
 
     function _pullTokensForRedeem(
         TokenInsurance storage tokenInsurance,
         IERC20 token,
         uint256 _amount
-    ) internal returns (uint256 busdValue) {
+    ) internal {
         uint256 initialBalance = token.balanceOf(address(this));
         require(
             token.transferFrom(msg.sender, address(this), _amount),
@@ -389,7 +405,7 @@ contract LiftoffInsurance is
         uint256 amountReceived =
             token.balanceOf(address(this)).sub(initialBalance);
 
-        busdValue = getRedeemValue(
+        uint256 busdValue = getRedeemValue(
             amountReceived,
             tokenInsurance.tokensPerEthWad
         );
@@ -397,7 +413,6 @@ contract LiftoffInsurance is
             busdValue >= 0.001 ether,
             "Amount must have value of at least 0.001 BUSD"
         );
-        return busdValue;
     }
 
     function _bUsdClaimDistribution(
