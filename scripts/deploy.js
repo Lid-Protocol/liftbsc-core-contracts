@@ -53,7 +53,8 @@ async function main() {
       settings.ethBuyBP,
       settings.projectDevBP,
       settings.mainFeeBP,
-      settings.lidPoolBP
+      settings.lidPoolBP,
+      settings.airdropBP
     )
 
     console.log("setting addresses")
@@ -66,7 +67,8 @@ async function main() {
       settings.uniswapRouter,
       settings.uniswapFactory,
       settings.lidTreasury,
-      settings.lidPoolManager
+      settings.lidPoolManager,
+      settings.airdropDistributor
     )
   }
   
