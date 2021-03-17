@@ -23,7 +23,8 @@ describe('LiftoffSettings', function () {
       1500,
       7200,
       317,
-      543
+      543,
+      300
     );
     expect(await liftoffSettings.getBusdLockBP()).to.equal(240);
     expect(await liftoffSettings.getTokenUserBP()).to.equal(7931);
@@ -33,6 +34,7 @@ describe('LiftoffSettings', function () {
     expect(await liftoffSettings.getProjectDevBP()).to.equal(7200);
     expect(await liftoffSettings.getMainFeeBP()).to.equal(317);
     expect(await liftoffSettings.getLidPoolBP()).to.equal(543);
+    expect(await liftoffSettings.getAirdropBP()).to.equal(300);
   });
 
   it('setAllAddresses', async function () {
@@ -45,7 +47,8 @@ describe('LiftoffSettings', function () {
       uniswapRouter,
       uniswapFactory,
       lidTreasury,
-      lidPoolManager
+      lidPoolManager,
+      airdropDistributor
     ] = await ethers.getSigners();
     await liftoffSettings.setAllAddresses(
       liftoffInsurance.address,
@@ -56,7 +59,8 @@ describe('LiftoffSettings', function () {
       uniswapRouter.address,
       uniswapFactory.address,
       lidTreasury.address,
-      lidPoolManager.address
+      lidPoolManager.address,
+      airdropDistributor.address
     );
     expect(await liftoffSettings.getLiftoffInsurance()).to.equal(liftoffInsurance.address);
     expect(await liftoffSettings.getLiftoffRegistration()).to.equal(liftoffRegistration.address);
@@ -67,11 +71,17 @@ describe('LiftoffSettings', function () {
     expect(await liftoffSettings.getUniswapFactory()).to.equal(uniswapFactory.address);
     expect(await liftoffSettings.getLidTreasury()).to.equal(lidTreasury.address);
     expect(await liftoffSettings.getLidPoolManager()).to.equal(lidPoolManager.address);
+    expect(await liftoffSettings.getAirdropDistributor()).to.equal(airdropDistributor.address);
   });
 
   it('set/get TokenUserBP', async function () {
     await liftoffSettings.setTokenUserBP(1000);
     expect(await liftoffSettings.getTokenUserBP()).to.equal(1000);
+  });
+
+  it('set/get AirdropBP', async function () {
+    await liftoffSettings.setAirdropBP(300);
+    expect(await liftoffSettings.getAirdropBP()).to.equal(300);
   });
 
   it('set/get LiftoffInsurance', async function () {
@@ -131,6 +141,12 @@ describe('LiftoffSettings', function () {
     const [lidPoolManager] = await ethers.getSigners();
     await liftoffSettings.setLidPoolManager(lidPoolManager.address);
     expect(await liftoffSettings.getLidPoolManager()).to.equal(lidPoolManager.address);
+  });
+
+  it('set/get AirdropDistributor', async function () {
+    const [airdropDistributor] = await ethers.getSigners();
+    await liftoffSettings.setAirdropDistributor(airdropDistributor.address);
+    expect(await liftoffSettings.getAirdropDistributor()).to.equal(airdropDistributor.address);
   });
 
   it('setBusdBP should revert if sum of BP params is less than 10000', async function () {

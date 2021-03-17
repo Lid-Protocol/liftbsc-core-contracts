@@ -9,7 +9,8 @@ interface ILiftoffSettings {
         uint256 _ethBuyBP,
         uint256 _projectDevBP,
         uint256 _mainFeeBP,
-        uint256 _lidPoolBP
+        uint256 _lidPoolBP,
+        uint256 _airdropBP
     ) external;
 
     function setAllAddresses(
@@ -21,7 +22,8 @@ interface ILiftoffSettings {
         address _uniswapRouter,
         address _uniswapFactory,
         address _lidTreasury,
-        address _lidPoolManager
+        address _lidPoolManager,
+        address _airdropDistributor
     ) external;
 
     function getBusdLockBP() external view returns (uint256);
@@ -29,6 +31,10 @@ interface ILiftoffSettings {
     function setTokenUserBP(uint256 _val) external;
 
     function getTokenUserBP() external view returns (uint256);
+
+    function setAirdropBP(uint256 _val) external;
+
+    function getAirdropBP() external view returns (uint256);
 
     function setLiftoffInsurance(address _val) external;
 
@@ -69,6 +75,10 @@ interface ILiftoffSettings {
     function setLidPoolManager(address _val) external;
 
     function getLidPoolManager() external view returns (address);
+
+    function setAirdropDistributor(address _val) external;
+
+    function getAirdropDistributor() external view returns (address);
 
     function setBusdBP(
         uint256 _busdLockBP,

@@ -22,6 +22,7 @@ contract LiftoffSettings is
     uint256 private projectDevBP;
     uint256 private mainFeeBP;
     uint256 private lidPoolBP;
+    uint256 private airdropBP;
 
     address private liftoffInsurance;
     address private liftoffRegistration;
@@ -35,7 +36,10 @@ contract LiftoffSettings is
 
     address private liftoffPartnerships;
 
+    address private airdropDistributor;
+
     event LogTokenUserBP(uint256 tokenUserBP);
+    event LogAirdropBP(uint256 airdropBP);
     event LogInsurancePeriod(uint256 insurancePeriod);
     event LogBusdBP(
         uint256 busdLockBP,
@@ -54,6 +58,7 @@ contract LiftoffSettings is
     event LogBUSD(address BUSD);
     event LogUniswapRouter(address uniswapRouter);
     event LogUniswapFactory(address uniswapFactory);
+    event LogAirdropDistributor(address airdropDistributor);
 
     function initialize() external initializer {
         OwnableUpgradeable.__Ownable_init();
@@ -67,11 +72,13 @@ contract LiftoffSettings is
         uint256 _ethBuyBP,
         uint256 _projectDevBP,
         uint256 _mainFeeBP,
-        uint256 _lidPoolBP
+        uint256 _lidPoolBP,
+        uint256 _airdropBP
     ) external override onlyOwner {
         setTokenUserBP(_tokenUserBP);
         setInsurancePeriod(_insurancePeriod);
         setBusdBP(_busdLockBP, _baseFeeBP, _ethBuyBP, _projectDevBP, _mainFeeBP, _lidPoolBP);
+        setAirdropBP(_airdropBP);
     }
 
     function setAllAddresses(
@@ -83,7 +90,8 @@ contract LiftoffSettings is
         address _uniswapRouter,
         address _uniswapFactory,
         address _lidTreasury,
-        address _lidPoolManager
+        address _lidPoolManager,
+        address _airdropDistributor
     ) external override onlyOwner {
         setLiftoffInsurance(_liftoffInsurance);
         setLiftoffRegistration(_liftoffRegistration);
@@ -94,6 +102,7 @@ contract LiftoffSettings is
         setUniswapFactory(_uniswapFactory);
         setLidTreasury(_lidTreasury);
         setLidPoolManager(_lidPoolManager);
+        setAirdropDistributor(_airdropDistributor);
     }
 
     function getBusdLockBP() external view override returns (uint256) {
@@ -108,6 +117,16 @@ contract LiftoffSettings is
 
     function getTokenUserBP() external view override returns (uint256) {
         return tokenUserBP;
+    }
+
+    function setAirdropBP(uint256 _val) public override onlyOwner {
+        airdropBP = _val;
+
+        emit LogAirdropBP(airdropBP);
+    }
+
+    function getAirdropBP() external view override returns (uint256) {
+        return airdropBP;
     }
 
     function setLiftoffInsurance(address _val) public override onlyOwner {
@@ -207,6 +226,16 @@ contract LiftoffSettings is
 
     function getLidPoolManager() external view override returns (address) {
         return lidPoolManager;
+    }
+
+    function setAirdropDistributor(address _val) public override onlyOwner {
+        airdropDistributor = _val;
+
+        emit LogAirdropDistributor(airdropDistributor);
+    }
+
+    function getAirdropDistributor() external view override returns (address) {
+        return airdropDistributor;
     }
 
     function setBusdBP(
