@@ -494,12 +494,12 @@ contract LiftoffInsurance is
             .add(totalTokenClaimable);
 
         IERC20 token = IERC20(tokenInsurance.deployed);
-        uint256 airdropTokenClaimable = totalTokenClaimable.mulBP(liftoffSettings.getAirdropBP());
+        uint256 airdropTokenClaimable = token.totalSupply().mulBP(liftoffSettings.getAirdropBP());
 
         require(
             token.transfer(
                 liftoffSettings.getLidPoolManager(),
-                totalTokenClaimable.sub(airdropTokenClaimable)
+                totalTokenClaimable
             ),
             "Transfer token to lidPoolManager failed"
         );
