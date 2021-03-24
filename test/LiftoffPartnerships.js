@@ -3,14 +3,13 @@ const { solidity } = require("ethereum-waffle");
 const { expect } = chai;
 const { ether, time } = require("@openzeppelin/test-helpers");
 const { UniswapDeployAsync } = require("../tools/UniswapDeployAsync");
-const { XLockDeployAsync } = require("../tools/XLockDeployAsync");
 const loadJsonFile = require('load-json-file');
 const settings = loadJsonFile.sync("./scripts/settings.json").networks.hardhat;
 
 chai.use(solidity);
 
 describe('LiftoffPartnerships', function () {
-  let liftoffSettings, liftoffEngine, liftoffPartnerships;
+  let liftoffSettings, liftoffEngine, liftoffPartnerships, busd;
   let liftoffRegistration, sweepReceiver, projectDev, partner1, partner2;
   let tokenSaleId;
 
@@ -21,13 +20,13 @@ describe('LiftoffPartnerships', function () {
     projectDev = accounts[2];
     lidTreasury = accounts[3];
     lidPoolManager = accounts[4];
-    partner1 = accounts[5];
-    partner2 = accounts[6];
+    airdropDistributor = accounts[5];
+    partner1 = accounts[6];
+    partner2 = accounts[7];
 
     upgrades.silenceWarnings();
 
     const { uniswapV2Router02, uniswapV2Factory } = await UniswapDeployAsync(ethers);
-    const { xEth, xLocker} = await XLockDeployAsync(ethers, sweepReceiver, uniswapV2Factory, uniswapV2Router02);
 
     LiftoffSettings = await ethers.getContractFactory("LiftoffSettings");
     liftoffSettings = await upgrades.deployProxy(LiftoffSettings, []);
@@ -45,15 +44,20 @@ describe('LiftoffPartnerships', function () {
     liftoffPartnerships = await upgrades.deployProxy(LiftoffPartnerships, [liftoffSettings.address], { unsafeAllowCustomTypes: true });
     await liftoffPartnerships.deployed();
 
+    BUSD = await ethers.getContractFactory("ERC20Blacklist");
+    busd = await BUSD.deploy("TestToken", "TKN", ether("1000").toString(), liftoffEngine.address);
+    await busd.deployed();
+
     await liftoffSettings.setAllUints(
-      settings.ethXLockBP,
+      settings.busdLockBP,
       settings.tokenUserBP,
       settings.insurancePeriod,
       settings.baseFeeBP,
       settings.ethBuyBP,
       settings.projectDevBP,
       settings.mainFeeBP,
-      settings.lidPoolBP
+      settings.lidPoolBP,
+      settings.airdropBP
     );
 
     await liftoffSettings.setAllAddresses(
@@ -61,13 +65,13 @@ describe('LiftoffPartnerships', function () {
       liftoffRegistration.address,
       liftoffEngine.address,
       liftoffPartnerships.address,
-      xEth.address,
-      xLocker.address,
+      busd.address,
       uniswapV2Router02.address,
+      uniswapV2Factory.address,
       lidTreasury.address,
-      lidPoolManager.address
+      lidPoolManager.address,
+      airdropDistributor.address
     );
-
   });
 
   describe("State: Before Token Sale Start",function() {
@@ -78,7 +82,7 @@ describe('LiftoffPartnerships', function () {
         currentTime.toNumber() + time.duration.days(7).toNumber(),
         ether("500").toString(),
         ether("1000").toString(),
-        ether("10000").toString(),
+        ether("10").toString(),
         "TestToken",
         "TKN",
         projectDev.address

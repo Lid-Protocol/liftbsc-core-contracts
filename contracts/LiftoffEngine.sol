@@ -3,17 +3,16 @@ pragma solidity =0.6.6;
 import "./interfaces/ILiftoffEngine.sol";
 import "./interfaces/ILiftoffSettings.sol";
 import "./interfaces/ILiftoffInsurance.sol";
-import "@lidprotocol/xlock-contracts/contracts/interfaces/IXEth.sol";
-import "@lidprotocol/xlock-contracts/contracts/interfaces/IXLocker.sol";
 import "./library/BasisPoints.sol";
+import "./ERC20/ERC20Blacklist.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
-import "@uniswap/v2-periphery/contracts/libraries/UniswapV2Library.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/math/MathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
+import "hardhat/console.sol";
 
 contract LiftoffEngine is
     ILiftoffEngine,
@@ -52,6 +51,7 @@ contract LiftoffEngine is
 
     mapping(uint256 => TokenSale) public tokens;
     uint256 public totalTokenSales;
+    mapping(uint256 => uint256) public fixedRateWads;
 
     event LaunchToken(
         uint256 tokenId,
@@ -59,7 +59,7 @@ contract LiftoffEngine is
         uint256 endTime,
         uint256 softCap,
         uint256 hardCap,
-        uint256 totalSupply,
+        uint256 fixedRateWad,
         string name,
         string symbol,
         address dev
@@ -106,7 +106,7 @@ contract LiftoffEngine is
         uint256 _endTime,
         uint256 _softCap,
         uint256 _hardCap,
-        uint256 _totalSupply,
+        uint256 _fixedRateWad,
         string calldata _name,
         string calldata _symbol,
         address _projectDev
@@ -119,14 +119,8 @@ contract LiftoffEngine is
         require(_startTime > now, "Must start in the future");
         require(_hardCap >= _softCap, "Hardcap must be at least softCap");
         require(_softCap >= 10 ether, "Softcap must be at least 10 ether");
-        require(
-            _totalSupply >= 1000 * (10**18),
-            "TotalSupply must be at least 1000 tokens"
-        );
-        require(
-            _totalSupply < (10**12) * (10**18),
-            "TotalSupply must be less than 1 trillion tokens"
-        );
+        require(_fixedRateWad >= (10**9), "FixedRateWad is less than minimum");
+        require(_fixedRateWad <= (10**27), "FixedRateWad is more than maximum");
 
         tokenId = totalTokenSales;
 
@@ -136,7 +130,7 @@ contract LiftoffEngine is
             softCap: _softCap,
             hardCap: _hardCap,
             totalIgnited: 0,
-            totalSupply: _totalSupply,
+            totalSupply: 0,
             rewardSupply: 0,
             projectDev: _projectDev,
             deployed: address(0),
@@ -146,6 +140,8 @@ contract LiftoffEngine is
             isSparked: false
         });
 
+        fixedRateWads[tokenId] = _fixedRateWad;
+
         totalTokenSales++;
 
         emit LaunchToken(
@@ -154,48 +150,17 @@ contract LiftoffEngine is
             _endTime,
             _softCap,
             _hardCap,
-            _totalSupply,
+            _fixedRateWad,
             _name,
             _symbol,
             _projectDev
         );
     }
 
-    function igniteEth(uint256 _tokenSaleId)
-        external
-        payable
-        override
-        whenNotPaused
-    {
-        TokenSale storage tokenSale = tokens[_tokenSaleId];
-        require(
-            isIgniting(
-                tokenSale.startTime,
-                tokenSale.endTime,
-                tokenSale.totalIgnited,
-                tokenSale.hardCap
-            ),
-            "Not igniting."
-        );
-        uint256 toIgnite =
-            getAmountToIgnite(
-                msg.value,
-                tokenSale.hardCap,
-                tokenSale.totalIgnited
-            );
-
-        IXEth(liftoffSettings.getXEth()).deposit{value: toIgnite}();
-        _addIgnite(tokenSale, msg.sender, toIgnite);
-
-        msg.sender.transfer(msg.value.sub(toIgnite));
-
-        emit Ignite(_tokenSaleId, msg.sender, toIgnite);
-    }
-
     function ignite(
         uint256 _tokenSaleId,
         address _for,
-        uint256 _amountXEth
+        uint256 _amountBusd
     ) external override whenNotPaused {
         TokenSale storage tokenSale = tokens[_tokenSaleId];
         require(
@@ -209,13 +174,13 @@ contract LiftoffEngine is
         );
         uint256 toIgnite =
             getAmountToIgnite(
-                _amountXEth,
+                _amountBusd,
                 tokenSale.hardCap,
                 tokenSale.totalIgnited
             );
 
         require(
-            IXEth(liftoffSettings.getXEth()).transferFrom(
+            IERC20(liftoffSettings.getBUSD()).transferFrom(
                 msg.sender,
                 address(this),
                 toIgnite
@@ -243,7 +208,7 @@ contract LiftoffEngine is
         delete tokenSale.ignitors[msg.sender];
         tokenSale.totalIgnited = tokenSale.totalIgnited.sub(wadToUndo);
         require(
-            IXEth(liftoffSettings.getXEth()).transfer(msg.sender, wadToUndo),
+            IERC20(liftoffSettings.getBUSD()).transfer(msg.sender, wadToUndo),
             "Transfer failed"
         );
         emit UndoIgnite(_tokenSaleId, msg.sender, wadToUndo);
@@ -292,10 +257,15 @@ contract LiftoffEngine is
         );
 
         tokenSale.isSparked = true;
-
-        uint256 xEthBuy = _deployViaXLock(tokenSale);
+        tokenSale.totalSupply =
+            uint256(10000).mul(fixedRateWads[_tokenSaleId]).mul(
+                tokenSale.totalIgnited
+            ) /
+            liftoffSettings.getTokenUserBP() /
+            (10**18);
+        uint256 busdBuy = _deploy(tokenSale);
         _allocateTokensPostDeploy(tokenSale);
-        _insuranceRegistration(tokenSale, _tokenSaleId, xEthBuy);
+        _insuranceRegistration(tokenSale, _tokenSaleId, busdBuy);
 
         emit Spark(_tokenSaleId, tokenSale.deployed, tokenSale.rewardSupply);
     }
@@ -321,7 +291,7 @@ contract LiftoffEngine is
         ignitor.hasRefunded = true;
 
         require(
-            IXEth(liftoffSettings.getXEth()).transfer(_for, ignitor.ignited),
+            IERC20(liftoffSettings.getBUSD()).transfer(_for, ignitor.ignited),
             "Transfer failed"
         );
 
@@ -449,46 +419,78 @@ contract LiftoffEngine is
     }
 
     function getAmountToIgnite(
-        uint256 amountXEth,
+        uint256 amountBusd,
         uint256 hardCap,
         uint256 totalIgnited
     ) public pure returns (uint256 toIgnite) {
         uint256 maxIgnite = hardCap.sub(totalIgnited);
 
-        if (maxIgnite < amountXEth) {
+        if (maxIgnite < amountBusd) {
             toIgnite = maxIgnite;
         } else {
-            toIgnite = amountXEth;
+            toIgnite = amountBusd;
         }
     }
 
-    function _deployViaXLock(TokenSale storage tokenSale)
+    function _deploy(TokenSale storage tokenSale)
         internal
-        returns (uint256 xEthBuy)
+        returns (uint256 busdBuy)
     {
-        uint256 xEthLocked =
-            tokenSale.totalIgnited.mulBP(liftoffSettings.getEthXLockBP());
-        xEthBuy = tokenSale.totalIgnited.mulBP(liftoffSettings.getEthBuyBP());
+        uint256 busdLocked =
+            tokenSale.totalIgnited.mulBP(liftoffSettings.getBusdLockBP());
+        busdBuy = tokenSale.totalIgnited.mulBP(liftoffSettings.getEthBuyBP());
 
-        (address deployed, address pair) =
-            IXLocker(liftoffSettings.getXLocker()).launchERC20Blacklist(
-                tokenSale.name,
-                tokenSale.symbol,
-                tokenSale.totalSupply,
-                xEthLocked,
-                liftoffSettings.getLiftoffInsurance()
+        address deployed =
+            address(
+                new ERC20Blacklist(
+                    tokenSale.name,
+                    tokenSale.symbol,
+                    tokenSale.totalSupply,
+                    address(this)
+                )
             );
 
-        _swapExactXEthForTokens(
-            xEthBuy,
-            IERC20(liftoffSettings.getXEth()),
-            IUniswapV2Pair(pair)
-        );
+        //Lock symbol/busd liquidity
+        uint256 lockedTokens = tokenSale.totalSupply.mul(busdLocked).div(busdBuy.add(busdLocked));
+        address pair =
+            _lockLiquidity(lockedTokens, busdLocked.add(busdBuy), deployed);
 
         tokenSale.pair = pair;
         tokenSale.deployed = deployed;
 
-        return xEthBuy;
+        return busdBuy;
+    }
+
+    function _lockLiquidity(
+        uint256 wadToken,
+        uint256 wadBusd,
+        address token
+    ) internal returns (address pair) {
+
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
+
+        pair = _addLiquidity(IERC20(token), busd, wadToken, wadBusd);
+
+        return pair;
+    }
+
+    function _addLiquidity(
+        IERC20 token,
+        IERC20 busd,
+        uint256 wadToken,
+        uint256 wadBusd
+    ) internal returns (address pair) {
+        pair = IUniswapV2Factory(liftoffSettings.getUniswapFactory()).createPair(
+            address(busd),
+            address(token)
+        );
+        (uint256 reserve0, uint256 reserve1, ) =
+            IUniswapV2Pair(pair).getReserves();
+        require(reserve0 == 0 && reserve1 == 0, "Pair already has reserves");
+
+        require(token.transfer(pair, wadToken), "Transfer Failed");
+        require(busd.transfer(pair, wadBusd), "Transfer Failed");
+        IUniswapV2Pair(pair).mint(address(liftoffSettings.getLiftoffInsurance()));
     }
 
     function _allocateTokensPostDeploy(TokenSale storage tokenSale) internal {
@@ -502,16 +504,22 @@ contract LiftoffEngine is
     function _insuranceRegistration(
         TokenSale storage tokenSale,
         uint256 _tokenSaleId,
-        uint256 _xEthBuy
+        uint256 _busdBuy
     ) internal {
         IERC20 deployed = IERC20(tokenSale.deployed);
         uint256 toInsurance =
             deployed.balanceOf(address(this)).sub(tokenSale.rewardSupply);
         address liftoffInsurance = liftoffSettings.getLiftoffInsurance();
         deployed.transfer(liftoffInsurance, toInsurance);
-        IXEth(liftoffSettings.getXEth()).transfer(
+        
+        uint256 busdLocked =
+            tokenSale.totalIgnited.mulBP(liftoffSettings.getBusdLockBP());
+        IERC20 busd = IERC20(liftoffSettings.getBUSD());
+        uint256 amount = tokenSale.totalIgnited.sub(_busdBuy).sub(busdLocked);
+        busd.approve(liftoffInsurance, amount);
+        busd.transfer(
             liftoffInsurance,
-            tokenSale.totalIgnited.sub(_xEthBuy)
+            amount
         );
 
         ILiftoffInsurance(liftoffInsurance).register(_tokenSaleId);
@@ -525,23 +533,5 @@ contract LiftoffEngine is
         Ignitor storage ignitor = tokenSale.ignitors[_for];
         ignitor.ignited = ignitor.ignited.add(toIgnite);
         tokenSale.totalIgnited = tokenSale.totalIgnited.add(toIgnite);
-    }
-
-    //WARNING: Not tested with transfer tax tokens. Will probably fail with such.
-    function _swapExactXEthForTokens(
-        uint256 amountIn,
-        IERC20 xEth,
-        IUniswapV2Pair pair
-    ) internal {
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        bool token0IsXEth = pair.token0() == address(xEth);
-        (uint256 reserveIn, uint256 reserveOut) =
-            token0IsXEth ? (reserve0, reserve1) : (reserve1, reserve0);
-        uint256 amountOut =
-            UniswapV2Library.getAmountOut(amountIn, reserveIn, reserveOut);
-        require(xEth.transfer(address(pair), amountIn), "Transfer failed");
-        (uint256 amount0Out, uint256 amount1Out) =
-            token0IsXEth ? (uint256(0), amountOut) : (amountOut, uint256(0));
-        pair.swap(amount0Out, amount1Out, address(this), new bytes(0));
     }
 }

@@ -3,7 +3,6 @@ const { solidity } = require("ethereum-waffle");
 const { expect } = chai;
 const { ether, time, BN } = require("@openzeppelin/test-helpers");
 const { UniswapDeployAsync } = require("../tools/UniswapDeployAsync");
-const { XLockDeployAsync } = require("../tools/XLockDeployAsync");
 const loadJsonFile = require('load-json-file');
 const settings = loadJsonFile.sync("./scripts/settings.json").networks.hardhat;
 
@@ -24,16 +23,16 @@ describe('LiftoffInsurance', function () {
     ignitor3 = accounts[5];
     lidTreasury = accounts[6];
     lidPoolManager = accounts[7];
-    partner1 = accounts[8];
-    partner2 = accounts[9];
+    airdropDistributor = accounts[8];
+    partner1 = accounts[9];
+    partner2 = accounts[10];
 
     upgrades.silenceWarnings();
 
     IERC20 = await ethers.getContractAt("@uniswap/v2-core/contracts/interfaces/IERC20.sol:IERC20",ethers.constants.AddressZero)
 
     const { uniswapV2Router02, uniswapV2Factory } = await UniswapDeployAsync(ethers);
-    const { xEth, xLocker} = await XLockDeployAsync(ethers, sweepReceiver, uniswapV2Factory, uniswapV2Router02);
-    
+
     LiftoffSettings = await ethers.getContractFactory("LiftoffSettings");
     liftoffSettings = await upgrades.deployProxy(LiftoffSettings, []);
     await liftoffSettings.deployed();
@@ -50,15 +49,20 @@ describe('LiftoffInsurance', function () {
     liftoffPartnerships = await upgrades.deployProxy(LiftoffPartnerships, [liftoffSettings.address], { unsafeAllowCustomTypes: true });
     await liftoffPartnerships.deployed();
 
+    BUSD = await ethers.getContractFactory("ERC20Blacklist");
+    busd = await BUSD.deploy("TestToken", "TKN", ether("3000").toString(), liftoffEngine.address);
+    await busd.deployed();
+
     await liftoffSettings.setAllUints(
-      settings.ethXLockBP,
+      settings.busdLockBP,
       settings.tokenUserBP,
       settings.insurancePeriod,
       settings.baseFeeBP,
       settings.ethBuyBP,
       settings.projectDevBP,
       settings.mainFeeBP,
-      settings.lidPoolBP
+      settings.lidPoolBP,
+      settings.airdropBP
     );
 
     await liftoffSettings.setAllAddresses(
@@ -66,11 +70,12 @@ describe('LiftoffInsurance', function () {
       liftoffRegistration.address,
       liftoffEngine.address,
       liftoffPartnerships.address,
-      xEth.address,
-      xLocker.address,
+      busd.address,
       uniswapV2Router02.address,
+      uniswapV2Factory.address,
       lidTreasury.address,
-      lidPoolManager.address
+      lidPoolManager.address,
+      airdropDistributor.address
     );
   });
 
@@ -90,27 +95,27 @@ describe('LiftoffInsurance', function () {
       })
     })
     describe("isInsuranceExhausted", function() {
-      let currentTime, startTime, insurancePeriod, xEthValue, 
-        claimedXEth, baseXEth, redeemedXEth, isUnwound;
+      let currentTime, startTime, insurancePeriod, busdValue, 
+        claimedBusd, baseBusd, redeemedBusd, isUnwound;
       before(async function () {
         startTime = await time.latest();
         insurancePeriod = new BN(settings.insurancePeriod);
         currentTime = startTime.add(insurancePeriod).add(time.duration.days(1));
-        xEthValue = ether("10");
-        baseXEth = ether("100");
-        redeemedXEth = ether("75");
-        claimedXEth = ether("20");
+        busdValue = ether("10");
+        baseBusd = ether("100");
+        redeemedBusd = ether("75");
+        claimedBusd = ether("20");
         isUnwound = false;
       });
-      it("Should be true if not isUnwound, currentTime > startTime+insurancePeriod, and baseXEth < redeemedXEth + claimedXeth + xEthValue", async function() {
+      it("Should be true if not isUnwound, currentTime > startTime+insurancePeriod, and baseBusd < redeemedBusd + claimedBusd + busdValue", async function() {
         const isExhausted = await liftoffInsurance.isInsuranceExhausted(
           currentTime.toString(),
           startTime.toString(),
           insurancePeriod.toString(),
-          xEthValue.toString(),
-          baseXEth.toString(),
-          redeemedXEth.toString(),
-          claimedXEth.toString(),
+          busdValue.toString(),
+          baseBusd.toString(),
+          redeemedBusd.toString(),
+          claimedBusd.toString(),
           isUnwound
         );
         expect(isExhausted).to.be.true;
@@ -120,10 +125,10 @@ describe('LiftoffInsurance', function () {
           currentTime.toString(),
           startTime.toString(),
           insurancePeriod.toString(),
-          xEthValue.toString(),
-          baseXEth.toString(),
-          redeemedXEth.toString(),
-          claimedXEth.toString(),
+          busdValue.toString(),
+          baseBusd.toString(),
+          redeemedBusd.toString(),
+          claimedBusd.toString(),
           true
         );
         expect(isExhausted).to.be.false;
@@ -133,23 +138,23 @@ describe('LiftoffInsurance', function () {
           startTime.add(insurancePeriod).toString(),
           startTime.toString(),
           insurancePeriod.toString(),
-          xEthValue.toString(),
-          baseXEth.toString(),
-          redeemedXEth.toString(),
-          claimedXEth.toString(),
+          busdValue.toString(),
+          baseBusd.toString(),
+          redeemedBusd.toString(),
+          claimedBusd.toString(),
           isUnwound
         );
         expect(isExhausted).to.be.false;
       });
-      it("Should be false if baseXEth > redeemedXEth + xEthValue + claimedXEth", async function() {
+      it("Should be false if baseBusd > redeemedBusd + busdValue + claimedBusd", async function() {
         const isExhausted = await liftoffInsurance.isInsuranceExhausted(
           currentTime.toString(),
           startTime.toString(),
           insurancePeriod.toString(),
-          xEthValue.toString(),
-          baseXEth.toString(),
+          busdValue.toString(),
+          baseBusd.toString(),
           ether("0").toString(),
-          claimedXEth.toString(),
+          claimedBusd.toString(),
           isUnwound
         );
         expect(isExhausted).to.be.false;
@@ -184,7 +189,7 @@ describe('LiftoffInsurance', function () {
       });
     });
     describe("getRedeemValue", function() {
-      it("Should be equal to amount divided by tokens/eth when price is above one", async function() {
+      it("Should be equal to amount divided by tokens/busd when price is above one", async function() {
         const amount = ether("3193.12321");
         const tokensPerEthWad = ether("3241.2313");
         const redeemValue = await liftoffInsurance.getRedeemValue(
@@ -196,7 +201,7 @@ describe('LiftoffInsurance', function () {
         expect(redeemValue).to.be.bignumber.below(ether("1").toString());
         expect(redeemValue).to.be.bignumber.equal(expectedAmount);
       });
-      it("Should be equal to amount divided by tokens/eth when price is below one", async function() {
+      it("Should be equal to amount divided by tokens/busd when price is below one", async function() {
         const amount = ether("0.12321");
         const tokensPerEthWad = ether("0.001313121187");
         const redeemValue = await liftoffInsurance.getRedeemValue(
@@ -241,41 +246,41 @@ describe('LiftoffInsurance', function () {
         expect(totalClaimable).to.be.bignumber.equal(base.sub(claimed).toString());
       });
     });
-    describe("getTotalXethClaimable", function() {
-      let totalIgnited, redeemedXEth, claimedXeth;
+    describe("getTotalBusdClaimable", function() {
+      let totalIgnited, redeemedBusd, claimedBusd;
       before(async function() {
         totalIgnited = ether("3500");
-        redeemedXEth = ether("1200");
-        claimedXeth = ether("230");
+        redeemedBusd = ether("1200");
+        claimedBusd = ether("230");
         cycles = new BN("3");
       })
       it("Should be 0 when cycles are 0", async function() {
-        const totalClaimable = await liftoffInsurance.getTotalXethClaimable(
+        const totalClaimable = await liftoffInsurance.getTotalBusdClaimable(
           totalIgnited.toString(),
-          redeemedXEth.toString(),
-          claimedXeth.toString(),
+          redeemedBusd.toString(),
+          claimedBusd.toString(),
           0
         );
         expect(totalClaimable).to.be.bignumber.equal(0);
       });
-      it("Should be (total - redeemedXeth - claimedXeth)  * cycles / 10 - claimed when cycles are 3", async function() {
-        const totalClaimable = await liftoffInsurance.getTotalXethClaimable(
+      it("Should be (total - redeemedBusd - claimedBusd)  * cycles / 10 - claimed when cycles are 3", async function() {
+        const totalClaimable = await liftoffInsurance.getTotalBusdClaimable(
           totalIgnited.toString(),
-          redeemedXEth.toString(),
-          claimedXeth.toString(),
+          redeemedBusd.toString(),
+          claimedBusd.toString(),
           cycles.toString()
         );
-        const expectedValue = totalIgnited.sub(redeemedXEth).sub(claimedXeth).mul(cycles).div(new BN("10"));
+        const expectedValue = totalIgnited.sub(redeemedBusd).sub(claimedBusd).mul(cycles).div(new BN("10"));
         expect(totalClaimable).to.be.bignumber.equal(expectedValue.toString());
       });
-      it("Should be (total - redeemedXeth - claimed when cycles are greater than 10", async function() {
-        const totalClaimable = await liftoffInsurance.getTotalXethClaimable(
+      it("Should be (total - redeemedBusd - claimed when cycles are greater than 10", async function() {
+        const totalClaimable = await liftoffInsurance.getTotalBusdClaimable(
           totalIgnited.toString(),
-          redeemedXEth.toString(),
-          claimedXeth.toString(),
+          redeemedBusd.toString(),
+          claimedBusd.toString(),
           "12"
         );
-        const expectedValue = totalIgnited.sub(redeemedXEth).sub(claimedXeth);
+        const expectedValue = totalIgnited.sub(redeemedBusd).sub(claimedBusd);
         expect(totalClaimable).to.be.bignumber.equal(expectedValue.toString());
       });
     });
@@ -309,6 +314,20 @@ describe('LiftoffInsurance', function () {
         ).to.be.revertedWith("Cannot create insurance")
       });
     });
+    describe("increaseInsuranceBonus", function() {
+      it("should revert if not owner", async function() {
+        await expect(
+          liftoffInsurance.connect(ignitor1).increaseInsuranceBonus(0, ignitor1.address, 100)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+      });
+    });
+    describe("decreaseInsuranceBonus", function() {
+      it("should revert if not owner", async function() {
+        await expect(
+          liftoffInsurance.connect(ignitor1).decreaseInsuranceBonus(0, ignitor1.address, 100)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+      });
+    });
   });
   describe("State: Cycle 0", function() {
     let tokenInsurance, tokenSale;
@@ -319,7 +338,7 @@ describe('LiftoffInsurance', function () {
         currentTime.toNumber() + time.duration.days(7).toNumber(),
         ether("500").toString(),
         ether("1000").toString(),
-        ether("10000").toString(),
+        ether("10").toString(),
         "TestToken",
         "TKN",
         projectDev.address
@@ -329,17 +348,29 @@ describe('LiftoffInsurance', function () {
       );
       await time.advanceBlock();
 
-      await liftoffEngine.connect(ignitor1).igniteEth(
+      await busd.transfer(ignitor1.address, ether("300").toString());
+      let contract = busd.connect(ignitor1);
+      await contract.approve(liftoffEngine.address, ether("300").toString());
+      await liftoffEngine.connect(ignitor1).ignite(
         tokenSaleId.value,
-          { value: ether("300").toString() }
+        ignitor1.address,
+        ether("300").toString()
       );
-      await liftoffEngine.connect(ignitor2).igniteEth(
+        await busd.transfer(ignitor2.address, ether("200").toString());
+      contract = busd.connect(ignitor2);
+      await contract.approve(liftoffEngine.address, ether("200").toString());
+      await liftoffEngine.connect(ignitor2).ignite(
         tokenSaleId.value,
-          { value: ether("200").toString() }
+        ignitor2.address,
+        ether("200").toString()
       );
-      await liftoffEngine.connect(ignitor3).igniteEth(
+      await busd.transfer(ignitor3.address, ether("600").toString());
+      contract = busd.connect(ignitor3);
+      await contract.approve(liftoffEngine.address, ether("600").toString());
+      await liftoffEngine.connect(ignitor3).ignite(
         tokenSaleId.value,
-          { value: ether("600").toString() }
+        ignitor3.address,
+        ether("600").toString()
       );
       await time.increase(
         time.duration.days(6)
@@ -387,7 +418,7 @@ describe('LiftoffInsurance', function () {
       it("should set tokenInsurance.totalIgnited to liftoffEngine totalIgnited", async function() {
         expect(tokenInsurance.totalIgnited).to.equal(tokenSale.totalIgnited);
       });
-      it("Should set tokensPerEthWad s.t. rewardSupply/tokensPerEth = totalIgnited minus base fee", async function() {
+      it("Should set tokensPerEthWad s.t. rewardSupply/tokensPerBusd = totalIgnited minus base fee", async function() {
         expect(tokenInsurance.tokensPerEthWad).to.be.gt(ether("0.01").toString());
         expect(tokenInsurance.tokensPerEthWad).to.be.lt(ether("100").toString());
         const calcValue = tokenSale.rewardSupply
@@ -397,8 +428,8 @@ describe('LiftoffInsurance', function () {
         expect(calcValue).to.be.lt(expValue);
         expect(calcValue).to.be.gt(expValue.sub(100));
       })
-      it("should set baseXEth to total ignited minus buy", async function() {
-        expect(tokenInsurance.baseXEth).to.equal(
+      it("should set baseBusd to total ignited minus buy", async function() {
+        expect(tokenInsurance.baseBusd).to.equal(
           tokenSale.totalIgnited
           .mul(10000-settings.ethBuyBP).div(10000)
         );
@@ -420,40 +451,40 @@ describe('LiftoffInsurance', function () {
         await token.connect(ignitor2).approve(liftoffInsurance.address, ethers.constants.MaxUint256);
         await token.connect(ignitor3).approve(liftoffInsurance.address, ethers.constants.MaxUint256);
       })
-      it("should refund all deposited eth minus base fee when all tokens redeemed", async function() {
+      it("should refund all deposited busd minus base fee when all tokens redeemed", async function() {
         const tokenBalance = await token.balanceOf(ignitor1.address);
         await liftoffInsurance.connect(ignitor1).redeem(tokenSaleId.value, tokenBalance);
-        const xethBalance = await xEth.balanceOf(ignitor1.address);
+        const busdBalance = await busd.balanceOf(ignitor1.address);
         const expectedRedeemValue = ethers.utils.parseEther("300")
           .mul(10000-settings.baseFeeBP)
           .div(10000)
-        expect(xethBalance).to.be.lt(expectedRedeemValue);
-        expect(xethBalance).to.be.gt(expectedRedeemValue.sub(100));
+        expect(busdBalance).to.be.lt(expectedRedeemValue);
+        expect(busdBalance).to.be.gt(expectedRedeemValue.sub(100));
       });
-      it("should refund all deposited eth minus base fee when all tokens redeemed in 2 parts", async function() {
+      it("should refund all deposited busd minus base fee when all tokens redeemed in 2 parts", async function() {
         let tokenBalance = await token.balanceOf(ignitor2.address);
         await liftoffInsurance.connect(ignitor2).redeem(tokenSaleId.value, tokenBalance.div(2));
         tokenBalance = await token.balanceOf(ignitor2.address);
         await liftoffInsurance.connect(ignitor2).redeem(tokenSaleId.value, tokenBalance);
-        const xethBalance = await xEth.balanceOf(ignitor2.address);
+        const busdBalance = await busd.balanceOf(ignitor2.address);
         const expectedRedeemValue = ethers.utils.parseEther("200")
           .mul(10000-settings.baseFeeBP)
           .div(10000)
-        expect(xethBalance).to.be.lt(expectedRedeemValue);
-        expect(xethBalance).to.be.gt(expectedRedeemValue.sub(100));
+        expect(busdBalance).to.be.lt(expectedRedeemValue);
+        expect(busdBalance).to.be.gt(expectedRedeemValue.sub(100));
       });
-      it("should trigger unwind if all redeemed xeth is greater than baseXEth", async function() {
+      it("should trigger unwind if all redeemed busd is greater than baseBusd", async function() {
         let tokenBalance = await token.balanceOf(ignitor3.address);
         await liftoffInsurance.connect(ignitor3).redeem(tokenSaleId.value, tokenBalance.div(2));
         tokenBalance = await token.balanceOf(ignitor3.address);
+        // Following redeem doesn't work atm since insurance doesn't have enough busd to pay even though swap happened
+        const preBusdBalance = await busd.balanceOf(ignitor3.address);
         await liftoffInsurance.connect(ignitor3).redeem(tokenSaleId.value, tokenBalance);
-        const xethBalance = await xEth.balanceOf(ignitor3.address);
         const tokenInsuranceOthers = await liftoffInsurance.getTokenInsuranceOthers(tokenSaleId.value);
-        const expectedRedeemValue = ethers.utils.parseEther("500")
-          .mul(10000-settings.baseFeeBP)
-          .div(10000)
-        expect(xethBalance).to.be.lt(expectedRedeemValue);
-        expect(xethBalance).to.be.gt(expectedRedeemValue.sub(100));
+        const tokenInsuranceUnits = await liftoffInsurance.getTokenInsuranceUints(tokenSaleId.value);
+        const expectedRedeemValue = await liftoffInsurance.getRedeemValue(tokenBalance, tokenInsuranceUnits.tokensPerEthWad);
+        const busdBalance = await busd.balanceOf(ignitor3.address);
+        expect(busdBalance).to.be.bignumber.equal(preBusdBalance.add(expectedRedeemValue));
         expect(tokenInsuranceOthers.isUnwound).to.be.true;
       });
     });
@@ -465,7 +496,7 @@ describe('LiftoffInsurance', function () {
         currentTime.toNumber() + time.duration.days(7).toNumber(),
         ether("50").toString(),
         ether("100").toString(),
-        ether("1000").toString(),
+        ether("10").toString(),
         "TestToken2",
         "TKN2",
         projectDev.address
@@ -481,18 +512,29 @@ describe('LiftoffInsurance', function () {
         time.duration.days(1)
       );
       await time.advanceBlock();
-
-      await liftoffEngine.connect(ignitor1).igniteEth(
-        1,
-          { value: ether("30").toString() }
+      await busd.transfer(ignitor1.address, ether("30").toString());
+      let contract = busd.connect(ignitor1);
+      await contract.approve(liftoffEngine.address, ether("30").toString());
+      await liftoffEngine.connect(ignitor1).ignite(
+        tokenSaleId,
+        ignitor1.address,
+        ether("30").toString()
       );
-      await liftoffEngine.connect(ignitor2).igniteEth(
-        1,
-          { value: ether("20").toString() }
+        await busd.transfer(ignitor2.address, ether("20").toString());
+      contract = busd.connect(ignitor2);
+      await contract.approve(liftoffEngine.address, ether("20").toString());
+      await liftoffEngine.connect(ignitor2).ignite(
+        tokenSaleId,
+        ignitor2.address,
+        ether("20").toString()
       );
-      await liftoffEngine.connect(ignitor3).igniteEth(
-        1,
-          { value: ether("60").toString() }
+      await busd.transfer(ignitor3.address, ether("60").toString());
+      contract = busd.connect(ignitor3);
+      await contract.approve(liftoffEngine.address, ether("60").toString());
+      await liftoffEngine.connect(ignitor3).ignite(
+        tokenSaleId,
+        ignitor3.address,
+        ether("60").toString()
       );
       await time.increase(
         time.duration.days(6)
@@ -506,7 +548,7 @@ describe('LiftoffInsurance', function () {
       });
       it("Should claim base fee, even if unwound",async function() {
         await liftoffInsurance.claim(0);
-        const treasuryBalance =  await xEth.balanceOf(lidTreasury.address);
+        const treasuryBalance =  await busd.balanceOf(lidTreasury.address);
         expect(
           treasuryBalance
         ).to.eq(
@@ -553,43 +595,101 @@ describe('LiftoffInsurance', function () {
           liftoffInsurance.connect(ignitor3).redeem(1,tokenBalance3)
         ).to.be.revertedWith("Redeem request exceeds available insurance.");
       });
+      it("Should redeem from bonusInsurance if it has positive amount", async function() {
+        // check increaseInsuranceBonus
+        const basicBusdBalanceInInsurance = await busd.balanceOf(liftoffInsurance.address);
+        let preBusdBalanceInInsurance = basicBusdBalanceInInsurance;
+        await busd.connect(ignitor3).approve(liftoffInsurance.address, ethers.constants.MaxUint256);
+        await liftoffInsurance.increaseInsuranceBonus(1, ignitor3.address, ether("40").toString());
+        let busdBalanceInInsurance = await busd.balanceOf(liftoffInsurance.address);
+        expect(busdBalanceInInsurance).to.be.bignumber.equal(preBusdBalanceInInsurance.add(ether("40").toString()));
+
+        // check decreaseInsuranceBonus
+        preBusdBalanceInInsurance = busdBalanceInInsurance;
+        await liftoffInsurance.decreaseInsuranceBonus(1, ignitor3.address, ether("5").toString());
+        busdBalanceInInsurance = await busd.balanceOf(liftoffInsurance.address);
+        expect(busdBalanceInInsurance).to.be.bignumber.equal(preBusdBalanceInInsurance.sub(ether("5").toString()));
+
+        // In case of bonusInsurance amount is bigger than getRedeemValue
+        let tokenBalance = await token.balanceOf(ignitor3.address);
+        const tokenInsuranceUnits = await liftoffInsurance.getTokenInsuranceUints(1);
+        let expectedBusdValue = await liftoffInsurance.getRedeemValue(tokenBalance.div(2), tokenInsuranceUnits.tokensPerEthWad);
+        let expectedBusdBalanceInIgnitor3 = (await busd.balanceOf(ignitor3.address)).add(expectedBusdValue);
+        await liftoffInsurance.connect(ignitor3).redeem(1, tokenBalance.div(2));
+        let busdBalanceInIgnitor3 = await busd.balanceOf(ignitor3.address);
+        expect(busdBalanceInIgnitor3).to.be.bignumber.equal(expectedBusdBalanceInIgnitor3);
+
+        // In case of bonusInsurance amount is less than getRedeemValue
+        // check busd balance
+        tokenBalance = await token.balanceOf(ignitor3.address);
+        expectedBusdValue = (await busd.balanceOf(liftoffInsurance.address)).sub(basicBusdBalanceInInsurance);
+        expectedBusdBalanceInIgnitor3 = (await busd.balanceOf(ignitor3.address)).add(expectedBusdValue);
+        await liftoffInsurance.connect(ignitor3).redeem(1,tokenBalance);
+        busdBalanceInIgnitor3 = await busd.balanceOf(ignitor3.address);
+        expect(busdBalanceInIgnitor3).to.be.bignumber.equal(expectedBusdBalanceInIgnitor3);
+
+        // check token balance
+        const expectedTokenValue = expectedBusdValue.mul(tokenInsuranceUnits.tokensPerEthWad).div(ether("1").toString());
+        const preTokenBalance = tokenBalance;
+        tokenBalance = await token.balanceOf(ignitor3.address);
+        expect(tokenBalance).to.be.bignumber.equal(preTokenBalance.sub(expectedTokenValue));
+      });
     });
     describe("claim", function() {
-      it("Should distribute xeth and xxx to lidpoolmanager, projectdev, lid treasury, partner1, partner2", async function() {
+      it("Should distribute busd and xxx to lidpoolmanager, projectdev, lid treasury, partner1, partner2, airdrop", async function() {
         const tokenInsurance = await liftoffInsurance.getTokenInsuranceUints(1);
-        const totalMaxClaim = tokenInsurance.totalIgnited.sub(tokenInsurance.redeemedXEth)
-        let xethLidTrsrInitial = await xEth.balanceOf(lidTreasury.address);
+        const totalMaxClaim = tokenInsurance.totalIgnited.sub(tokenInsurance.redeemedBusd)
+        let busdLidTrsrInitial = await busd.balanceOf(lidTreasury.address);
+        const preAirdropDistributorBalance = await token.balanceOf(airdropDistributor.address);
         await liftoffInsurance.claim(1)
-        let xethPoolBal = await xEth.balanceOf(lidPoolManager.address);
-        let xethProjDev = await xEth.balanceOf(projectDev.address);
-        let xethLidTrsr = await xEth.balanceOf(lidTreasury.address);
-        let xethPartnr1 = await xEth.balanceOf(partner1.address);
-        let xethPartnr2 = await xEth.balanceOf(partner2.address);
-        let xethtrsrDlt = xethLidTrsr.sub(xethLidTrsrInitial);
-        expect(xethProjDev).to.be.bignumber.gt(ether("2.1").toString());
-        expect(xethProjDev).to.be.bignumber.lt(ether("2.2").toString());
-        expect(xethProjDev).to.be.bignumber.eq(
+        let busdPoolBal = await busd.balanceOf(lidPoolManager.address);
+        let busdProjDev = await busd.balanceOf(projectDev.address);
+        let busdLidTrsr = await busd.balanceOf(lidTreasury.address);
+        let busdPartnr1 = await busd.balanceOf(partner1.address);
+        let busdPartnr2 = await busd.balanceOf(partner2.address);
+        let busdtrsrDlt = busdLidTrsr.sub(busdLidTrsrInitial);
+        expect(busdProjDev).to.be.bignumber.gt(ether("3.4").toString());
+        expect(busdProjDev).to.be.bignumber.lt(ether("3.5").toString());
+        expect(busdProjDev).to.be.bignumber.eq(
           totalMaxClaim.mul(settings.projectDevBP-150-200).div(10000).div(10)
         );
-        expect(xethtrsrDlt).to.be.bignumber.gt(ether("0.15").toString());
-        expect(xethtrsrDlt).to.be.bignumber.lt(ether("0.16").toString());
-        expect(xethtrsrDlt).to.be.bignumber.eq(
+        expect(busdtrsrDlt).to.be.bignumber.gt(ether("0.16").toString());
+        expect(busdtrsrDlt).to.be.bignumber.lt(ether("0.17").toString());
+        expect(busdtrsrDlt).to.be.bignumber.eq(
           totalMaxClaim.mul(settings.mainFeeBP).div(10000).div(10)
         );
-        expect(xethPoolBal).to.be.bignumber.gt(ether("1.0").toString());
-        expect(xethPoolBal).to.be.bignumber.lt(ether("1.1").toString());
-        expect(xethPoolBal).to.be.bignumber.eq(
+        expect(busdPoolBal).to.be.bignumber.gt(ether("0.27").toString());
+        expect(busdPoolBal).to.be.bignumber.lt(ether("0.28").toString());
+        expect(busdPoolBal).to.be.bignumber.eq(
           totalMaxClaim.mul(settings.lidPoolBP).div(10000).div(10)
         );
-        expect(xethPartnr1).to.be.bignumber.gt(ether("0.07").toString());
-        expect(xethPartnr1).to.be.bignumber.lt(ether("0.08").toString());
-        expect(xethPartnr1).to.be.bignumber.eq(
+        expect(busdPartnr1).to.be.bignumber.gt(ether("0.07").toString());
+        expect(busdPartnr1).to.be.bignumber.lt(ether("0.08").toString());
+        expect(busdPartnr1).to.be.bignumber.eq(
           totalMaxClaim.mul(150).div(10000).div(10)
         );
-        expect(xethPartnr2).to.be.bignumber.gt(ether("0.10").toString());
-        expect(xethPartnr2).to.be.bignumber.lt(ether("0.11").toString());
-        expect(xethPartnr2).to.be.bignumber.eq(
+        expect(busdPartnr2).to.be.bignumber.gt(ether("0.10").toString());
+        expect(busdPartnr2).to.be.bignumber.lt(ether("0.11").toString());
+        expect(busdPartnr2).to.be.bignumber.eq(
           totalMaxClaim.mul(200).div(10000).div(10)
+        );
+
+        const airdropTokenClaimable = (await token.totalSupply()).mul(settings.airdropBP).div(10000);
+        const airdropDistributorBalance = await token.balanceOf(airdropDistributor.address);
+        expect(airdropDistributorBalance.sub(preAirdropDistributorBalance)).to.be.bignumber.equal(airdropTokenClaimable);
+      });
+      it("Should revert if double claim in the same cycle",async function() {
+        await expect(
+          liftoffInsurance.claim(1)
+        ).to.be.revertedWith("Already claimed for this cycle.");
+      });
+      it("Should work for cycle2 claim",async function() {
+        await time.increase(
+          time.duration.days(7)
+        );
+        await time.advanceBlock();
+        await expect(
+          liftoffInsurance.claim(1)
         );
       });
     });

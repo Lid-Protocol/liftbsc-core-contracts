@@ -4,7 +4,7 @@ import "./interfaces/ILiftoffPartnerships.sol";
 import "./interfaces/ILiftoffSettings.sol";
 import "./interfaces/ILiftoffEngine.sol";
 import "./library/BasisPoints.sol";
-import "@lidprotocol/xlock-contracts/contracts/interfaces/IXEth.sol";
+import "@uniswap/v2-core/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
 
@@ -224,7 +224,7 @@ contract LiftoffPartnerships is ILiftoffPartnerships, OwnableUpgradeable {
                     request.feeBP.mul(_wad).div(
                         partnerships.totalBPForPartners
                     );
-                IXEth(liftoffSettings.getXEth()).transfer(
+                IERC20(liftoffSettings.getBUSD()).transfer(
                     partnerController[request.partnerId],
                     fee
                 );
